@@ -1,6 +1,110 @@
+# ================================
+# CURRENT DEPENDENCIES (Phase 1) ✅
+# ================================
+
+# Web Scraping & Automation
 playwright==1.40.0
-streamlit==1.28.1
 beautifulsoup4==4.12.2
 requests==2.31.0
+
+# Web Framework  
+flask==3.1.1
+
+# Data Processing
 pandas==2.1.4
-flask==3.1.1 
+
+# Legacy (from initial setup)
+streamlit==1.28.1
+
+# ================================
+# PLANNED DEPENDENCIES (Phase 2+) ⏳  
+# ================================
+
+# AI & Language Models
+# openai>=1.0.0              # GPT-4o integration for content analysis
+# anthropic>=0.7.0           # Claude integration (alternative/backup)
+
+# PDF & Document Processing  
+# pymupdf>=1.23.0            # PDF parsing and text extraction
+# pdfplumber>=0.10.0         # Advanced PDF table/form extraction
+# python-docx>=0.8.11        # DOCX document parsing
+
+# Database & Storage
+# supabase>=2.0.0            # Database, auth, and file storage
+# sqlalchemy>=2.0.0          # ORM for database operations
+# alembic>=1.12.0            # Database migrations
+
+# API Integrations
+# googlemaps>=4.10.0         # Vendor research and location services
+# stripe>=7.0.0              # Payment processing (future)
+
+# Email & Communications
+# sendgrid>=6.10.0           # Email automation for vendor outreach
+# jinja2>=3.1.0              # Email template rendering (already included with Flask)
+
+# Document Generation
+# weasyprint>=60.0           # HTML to PDF conversion
+# reportlab>=4.0.0           # Advanced PDF generation
+# markdown>=3.5.0            # Markdown processing for proposals
+
+# Data Analysis & Visualization
+# plotly>=5.17.0             # Interactive charts for pricing analysis
+# numpy>=1.24.0              # Numerical computations
+# scipy>=1.11.0              # Statistical analysis
+
+# Utilities & Tools
+# python-dotenv>=1.0.0       # Environment variable management
+# pydantic>=2.0.0            # Data validation and serialization
+# tenacity>=8.2.0            # Retry logic for API calls
+# httpx>=0.25.0              # Modern HTTP client for async operations
+
+# Development & Testing
+# pytest>=7.4.0             # Testing framework
+# pytest-asyncio>=0.21.0    # Async testing support
+# black>=23.0.0              # Code formatting
+# flake8>=6.0.0              # Code linting
+# mypy>=1.6.0                # Type checking
+
+# Security & Authentication
+# pyjwt>=2.8.0               # JWT token handling
+# bcrypt>=4.0.0              # Password hashing
+# cryptography>=41.0.0       # Encryption utilities
+
+# Background Tasks & Queues
+# celery>=5.3.0              # Background task processing
+# redis>=5.0.0               # Cache and message broker
+
+# Monitoring & Logging
+# sentry-sdk>=1.32.0         # Error tracking and monitoring
+# structlog>=23.2.0          # Structured logging
+
+# ================================
+# INSTALLATION NOTES
+# ================================
+
+# Phase 1 (Current - Working):
+# pip install playwright beautifulsoup4 requests flask pandas streamlit
+# python -m playwright install
+
+# Phase 2 (AI Integration):
+# pip install openai pymupdf pdfplumber python-dotenv pydantic
+
+# Phase 3+ (Full Platform):
+# pip install supabase googlemaps sendgrid weasyprint plotly
+
+# For Development:
+# pip install pytest pytest-asyncio black flake8 mypy
+
+# ================================
+# ENVIRONMENT VARIABLES REQUIRED
+# ================================
+
+# Phase 2:
+# OPENAI_API_KEY=your_openai_api_key
+# ANTHROPIC_API_KEY=your_anthropic_api_key (optional)
+
+# Phase 3+:
+# GOOGLE_MAPS_API_KEY=your_google_maps_key
+# SUPABASE_URL=your_supabase_url  
+# SUPABASE_KEY=your_supabase_key
+# SENDGRID_API_KEY=your_sendgrid_key 
