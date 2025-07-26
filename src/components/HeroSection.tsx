@@ -1,6 +1,7 @@
 import { ArrowRight, FileText, Zap, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Link } from "react-router-dom";
 
 const HeroSection = () => {
   return (
@@ -25,13 +26,17 @@ const HeroSection = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button size="lg" className="bg-gradient-primary hover:opacity-90 shadow-lg">
-              Start Automating
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-            <Button variant="outline" size="lg">
-              Watch Demo
-            </Button>
+            <Link to="/agent">
+              <Button size="lg" className="bg-gradient-primary hover:opacity-90 shadow-lg">
+                Start Automating
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </Link>
+            <Link to="/agent">
+              <Button variant="outline" size="lg">
+                Watch Demo
+              </Button>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   Globe, 
   Play, 
@@ -20,24 +21,11 @@ const DemoSection = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [progress, setProgress] = useState(0);
+  const navigate = useNavigate();
 
   const handleAnalyze = () => {
-    setIsAnalyzing(true);
-    setAnalysisComplete(false);
-    setProgress(0);
-
-    // Simulate analysis progress
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsAnalyzing(false);
-          setAnalysisComplete(true);
-          return 100;
-        }
-        return prev + 20;
-      });
-    }, 800);
+    // Navigate to agent page with the URL
+    navigate('/agent', { state: { rfpUrl } });
   };
 
   const exampleRfp = "https://mn.gov/admin/osp/government/contracting/requests-for-proposals.jsp";
@@ -208,9 +196,11 @@ const DemoSection = () => {
                   </div>
 
                   <div className="flex justify-center">
-                    <Button className="bg-gradient-primary hover:opacity-90">
-                      Generate Full Proposal
-                    </Button>
+                    <Link to="/agent">
+                      <Button className="bg-gradient-primary hover:opacity-90">
+                        Generate Full Proposal
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               )}

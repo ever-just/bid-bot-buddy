@@ -1,5 +1,6 @@
 import { Bot, Github, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const Header = () => {
   return (
@@ -39,9 +40,11 @@ const Header = () => {
             <Github className="h-4 w-4 mr-2" />
             GitHub
           </Button>
-          <Button size="sm" className="bg-gradient-primary hover:opacity-90">
-            Get Started
-          </Button>
+          <Link to="/agent">
+            <Button size="sm" className="bg-gradient-primary hover:opacity-90">
+              Get Started
+            </Button>
+          </Link>
           <Button variant="ghost" size="sm" className="md:hidden">
             <Menu className="h-4 w-4" />
           </Button>
