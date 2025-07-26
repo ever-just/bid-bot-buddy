@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Header -->
+        <div class="text-center mb-5">
+            <h1 class="display-4">🕷️ Web Content Scraper</h1>
+            <p class="lead text-muted">
+                Extract and analyze content from any webpage using advanced web scraping technology
+            </p>
+        </div>
+
+        <!-- Scraping Form -->
+        <div class="card shadow-lg">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-globe"></i> Enter URL to Scrape
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="scrapeForm">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">
+                            <i class="fas fa-link"></i>
+                        </span>
+                        <input type="text" 
+                               id="urlInput" 
+                               class="form-control form-control-lg" 
+                               placeholder="https://example.com or example.com"
+                               required>
+                        <button class="btn btn-primary btn-lg" type="submit">
+                            <i class="fas fa-rocket"></i> Scrape Page
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Quick Examples -->
+                <div class="mt-3">
+                    <small class="text-muted">Quick examples:</small>
+                    <div class="mt-2">
+                        <button class="btn btn-outline-secondary btn-sm me-2 example-btn" 
+                                data-url="https://example.com">
+                            example.com
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm me-2 example-btn" 
+                                data-url="https://news.ycombinator.com">
+                            news.ycombinator.com
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm example-btn" 
+                                data-url="https://httpbin.org/forms/post">
+                            httpbin.org/forms
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="text-center mt-4" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5>Scraping content...</h5>
+                    <p class="text-muted mb-0">This may take a few seconds</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="resultsContainer" style="display: none;">
+            <!-- Content will be dynamically inserted here -->
+        </div>
+
+        <!-- Error Container -->
+        <div id="errorContainer" class="mt-4" style="display: none;">
+            <div class="alert alert-danger" role="alert">
+                <h4 class="alert-heading">
+                    <i class="fas fa-exclamation-triangle"></i> Scraping Failed
+                </h4>
+                <p id="errorMessage"></p>
+                <hr>
+                <p class="mb-0">
+                    <small>
+                        Try checking the URL or try a different website. 
+                        Some sites may block automated scraping.
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Section -->
+<div class="row mt-5">
+    <div class="col-12">
+        <h2 class="text-center mb-4">✨ Features</h2>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-font fa-3x text-primary mb-3"></i>
+                <h5>Text Extraction</h5>
+                <p class="text-muted">
+                    Extract headings, paragraphs, lists, and all text content
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-link fa-3x text-success mb-3"></i>
+                <h5>Link Analysis</h5>
+                <p class="text-muted">
+                    Find and categorize internal vs external links
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-table fa-3x text-warning mb-3"></i>
+                <h5>Data Extraction</h5>
+                <p class="text-muted">
+                    Extract forms, images, tables, and structured data
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize the scraping functionality
+document.addEventListener('DOMContentLoaded', function() {
+    initializeScraper();
+});
+</script>
+{% endblock %} 
