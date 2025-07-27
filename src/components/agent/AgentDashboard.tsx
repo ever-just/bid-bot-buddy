@@ -2,63 +2,7 @@ import { Bot, FileSearch, TrendingUp, Users, DollarSign, Clock } from "lucide-re
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-
-const agents = [
-  {
-    id: 1,
-    name: "RFP Analyzer",
-    description: "Extracting requirements and deadlines",
-    status: "completed",
-    progress: 100,
-    icon: FileSearch,
-    result: "Requirements extracted: 23 items"
-  },
-  {
-    id: 2,
-    name: "Market Researcher",
-    description: "Analyzing market conditions and pricing",
-    status: "running",
-    progress: 75,
-    icon: TrendingUp,
-    result: "Market data: 15 competitors found"
-  },
-  {
-    id: 3,
-    name: "Vendor Scout",
-    description: "Finding qualified subcontractors",
-    status: "running",
-    progress: 45,
-    icon: Users,
-    result: "Vendors identified: 8 potential partners"
-  },
-  {
-    id: 4,
-    name: "Cost Estimator",
-    description: "Calculating optimal pricing strategy",
-    status: "pending",
-    progress: 0,
-    icon: DollarSign,
-    result: null
-  },
-  {
-    id: 5,
-    name: "Compliance Checker",
-    description: "Ensuring regulatory compliance",
-    status: "pending",
-    progress: 0,
-    icon: Bot,
-    result: null
-  },
-  {
-    id: 6,
-    name: "Proposal Generator",
-    description: "Creating final proposal document",
-    status: "pending",
-    progress: 0,
-    icon: Clock,
-    result: null
-  }
-];
+import { useAgent } from "@/contexts/AgentContext";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -82,7 +26,20 @@ const getStatusBadge = (status: string) => {
   }
 };
 
+const getIconComponent = (iconName: string) => {
+  const icons: Record<string, any> = {
+    FileSearch,
+    TrendingUp,
+    Users,
+    DollarSign,
+    Bot,
+    Clock
+  };
+  return icons[iconName] || Bot;
+};
+
 const AgentDashboard = () => {
+  const { state } = useAgent();
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -93,8 +50,8 @@ const AgentDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {agents.map((agent) => {
-          const IconComponent = agent.icon;
+        {state.agents.map((agent) => {
+          const IconComponent = getIconComponent(agent.icon);
           return (
             <Card key={agent.id} className="p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-start justify-between mb-4">
@@ -140,11 +97,14 @@ const AgentDashboard = () => {
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span>Total Completion</span>
-            <span>37%</span>
+            <span>{Math.round(state.agents.reduce((acc, agent) => acc + agent.progress, 0) / state.agents.length)}%</span>
           </div>
-          <Progress value={37} className="h-3" />
+          <Progress value={Math.round(state.agents.reduce((acc, agent) => acc + agent.progress, 0) / state.agents.length)} className="h-3" />
           <p className="text-sm text-muted-foreground">
-            Estimated time remaining: 12 minutes
+            {state.isProcessing ? 
+              `Processing... ${state.agents.filter(a => a.status === 'completed').length}/${state.agents.length} agents completed` :
+              state.currentStep === 'completed' ? 'All agents completed!' : 'Ready to start analysis'
+            }
           </p>
         </div>
       </Card>

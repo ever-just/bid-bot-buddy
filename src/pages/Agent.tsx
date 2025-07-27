@@ -1,16 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Upload, Link as LinkIcon, Settings, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "react-router-dom";
+import { AgentProvider, useAgent } from "@/contexts/AgentContext";
 import AgentDashboard from "@/components/agent/AgentDashboard";
 import RFPInput from "@/components/agent/RFPInput";
 import ResultsPanel from "@/components/agent/ResultsPanel";
 
-const Agent = () => {
+const AgentContent = () => {
   const [activeTab, setActiveTab] = useState("input");
+  const { state } = useAgent();
+
+  // Auto-switch to dashboard when processing starts
+  useEffect(() => {
+    if (state.currentStep === 'processing' && activeTab === 'input') {
+      setActiveTab('dashboard');
+    } else if (state.currentStep === 'completed' && activeTab !== 'results') {
+      setActiveTab('results');
+    }
+  }, [state.currentStep, activeTab]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,6 +73,14 @@ const Agent = () => {
         </Tabs>
       </div>
     </div>
+  );
+};
+
+const Agent = () => {
+  return (
+    <AgentProvider>
+      <AgentContent />
+    </AgentProvider>
   );
 };
 

@@ -1,27 +1,77 @@
 import { useState } from "react";
-import { Upload, Link as LinkIcon, FileText, Globe } from "lucide-react";
+import { Upload, Link as LinkIcon, FileText, Globe, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/services/api";
+import { useAgent } from "@/contexts/AgentContext";
 
 const RFPInput = () => {
   const [rfpUrl, setRfpUrl] = useState("");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+  const { startAnalysis } = useAgent();
 
-  const handleUrlSubmit = () => {
-    console.log("Analyzing RFP URL:", rfpUrl);
-    // TODO: Integrate with backend scraping service
+  const handleUrlSubmit = async () => {
+    if (!rfpUrl.trim()) {
+      toast({
+        title: "URL Required",
+        description: "Please enter a valid RFP URL",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await apiService.scrapeRFP(rfpUrl);
+      
+      if (result.status === 'error') {
+        throw new Error(result.error || 'Failed to scrape RFP');
+      }
+
+      toast({
+        title: "RFP Scraped Successfully",
+        description: `Found ${result.statistics?.text_length || 0} characters of content`,
+      });
+
+      startAnalysis(result);
+    } catch (error) {
+      console.error("Error scraping RFP:", error);
+      toast({
+        title: "Scraping Failed",
+        description: error instanceof Error ? error.message : "Failed to scrape the RFP. Please check the URL and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setUploadedFile(file);
-      console.log("File uploaded:", file.name);
+      toast({
+        title: "File Selected",
+        description: `Selected ${file.name}. Click 'Process Document' to analyze.`,
+      });
     }
+  };
+
+  const handleFileProcess = () => {
+    if (!uploadedFile) return;
+    
+    toast({
+      title: "File Processing Not Implemented",
+      description: "File upload processing will be implemented in the next update. Please use URL input for now.",
+      variant: "destructive",
+    });
   };
 
   return (
@@ -62,8 +112,15 @@ const RFPInput = () => {
                       className="pl-10"
                     />
                   </div>
-                  <Button onClick={handleUrlSubmit} disabled={!rfpUrl}>
-                    Analyze RFP
+                  <Button onClick={handleUrlSubmit} disabled={!rfpUrl || isLoading}>
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      "Analyze RFP"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -103,7 +160,7 @@ const RFPInput = () => {
                     <FileText className="h-4 w-4" />
                     <span className="text-sm font-medium">{uploadedFile.name}</span>
                   </div>
-                  <Button size="sm">Process Document</Button>
+                  <Button size="sm" onClick={handleFileProcess}>Process Document</Button>
                 </div>
               )}
             </div>
