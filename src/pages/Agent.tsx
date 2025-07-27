@@ -10,8 +10,17 @@ import AgentDashboard from "@/components/agent/AgentDashboard";
 import RFPInput from "@/components/agent/RFPInput";
 import ResultsPanel from "@/components/agent/ResultsPanel";
 
-const AgentContent = () => {
+const Agent = () => {
   const [activeTab, setActiveTab] = useState("input");
+
+  return (
+    <AgentProvider>
+      <AgentContent activeTab={activeTab} setActiveTab={setActiveTab} />
+    </AgentProvider>
+  );
+};
+
+const AgentContent = ({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) => {
   const { state } = useAgent();
 
   // Auto-switch to dashboard when processing starts
@@ -21,7 +30,7 @@ const AgentContent = () => {
     } else if (state.currentStep === 'completed' && activeTab !== 'results') {
       setActiveTab('results');
     }
-  }, [state.currentStep, activeTab]);
+  }, [state.currentStep, activeTab, setActiveTab]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -73,14 +82,6 @@ const AgentContent = () => {
         </Tabs>
       </div>
     </div>
-  );
-};
-
-const Agent = () => {
-  return (
-    <AgentProvider>
-      <AgentContent />
-    </AgentProvider>
   );
 };
 
