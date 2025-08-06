@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Upload, Link as LinkIcon, FileText, Globe, Loader2, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
+import { Upload, Link as LinkIcon, FileText, Globe, Loader2, AlertCircle, CheckCircle, RefreshCw, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ const RFPInput = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [scrapingStatus, setScrapingStatus] = useState("");
-  const [scrapingStage, setScrapingStage] = useState<'connecting' | 'scraping' | 'validating' | 'success' | 'error' | ''>('');
+  const [scrapingStage, setScrapingStage] = useState<'connecting' | 'browserless' | 'enhanced' | 'basic' | 'validating' | 'success' | 'error' | ''>('');
   const { toast } = useToast();
   const { startAnalysis } = useAgent();
 
@@ -31,11 +31,11 @@ const RFPInput = () => {
 
     setIsLoading(true);
     setScrapingStage('connecting');
-    setScrapingStatus("Initializing Python/Playwright scraper...");
+    setScrapingStatus("Initializing advanced scraping system...");
     
     try {
-      setScrapingStage('scraping');
-      setScrapingStatus("Advanced browser automation with Python/Playwright...");
+      setScrapingStage('browserless');
+      setScrapingStatus("🚀 Browserless.io: Advanced browser automation with authentication bypass...");
       
       const result = await apiService.scrapeRFP(rfpUrl);
       
@@ -55,11 +55,12 @@ const RFPInput = () => {
       }
 
       setScrapingStage('success');
-      setScrapingStatus(`Successfully extracted ${contentLength} characters using Python/Playwright!`);
+      const scraperUsed = result.meta?.scraper || 'advanced-scraper';
+      setScrapingStatus(`Successfully extracted ${contentLength} characters using ${scraperUsed}!`);
 
       toast({
         title: "RFP Content Extracted",
-        description: `Successfully extracted ${contentLength} characters using Python/Playwright. Starting Claude AI analysis...`,
+        description: `Successfully extracted ${contentLength} characters using ${scraperUsed}. Starting Claude AI analysis...`,
       });
 
       startAnalysis(result);
@@ -104,8 +105,12 @@ const RFPInput = () => {
     switch (scrapingStage) {
       case 'connecting':
         return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
-      case 'scraping':
+      case 'browserless':
+        return <Zap className="h-3 w-3 text-purple-500" />;
+      case 'enhanced':
         return <RefreshCw className="h-3 w-3 animate-spin text-blue-500" />;
+      case 'basic':
+        return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
       case 'validating':
         return <Loader2 className="h-3 w-3 animate-spin text-yellow-500" />;
       case 'success':
@@ -122,11 +127,11 @@ const RFPInput = () => {
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Submit Your RFP</h2>
         <p className="text-muted-foreground">
-          Python/Playwright browser automation + Claude AI multi-agent analysis
+          Browserless.io + Enhanced Scraping + Claude AI multi-agent analysis
         </p>
         <div className="flex items-center justify-center gap-2 mt-2">
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-          <span className="text-sm text-primary font-medium">Python/Playwright + Real-time Claude AI</span>
+          <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"></div>
+          <span className="text-sm text-purple-600 font-medium">Browserless.io Browser Automation</span>
         </div>
       </div>
 
@@ -184,12 +189,11 @@ const RFPInput = () => {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Python/Playwright Web Scraping System:</p>
-                    <p>• 🐍 Full Python backend with Playwright browser automation</p>
-                    <p>• 🔓 Handles complex authentication, JavaScript, and dynamic content</p>
-                    <p>• 📸 Screenshots and comprehensive content extraction</p>
-                    <p>• 🤖 Seamless integration with 6 Claude AI agents</p>
-                    <p>• 🔄 Automatic fallback to edge functions if backend unavailable</p>
+                    <p className="font-medium">Advanced 3-Tier Scraping System:</p>
+                    <p>• 🚀 <span className="text-purple-600 font-medium">Primary: Browserless.io</span> - Real Chrome browser automation, handles authentication barriers & JavaScript</p>
+                    <p>• 🔄 <span className="text-blue-600 font-medium">Fallback 1: Enhanced Scraper</span> - User agent rotation, retry logic, content extraction</p>
+                    <p>• 📝 <span className="text-yellow-600 font-medium">Fallback 2: Basic Scraper</span> - Simple HTTP requests for basic sites</p>
+                    <p>• 🤖 <span className="text-green-600 font-medium">Claude AI Multi-Agent</span> - 6 specialized agents analyze extracted content</p>
                   </div>
                 </div>
               </div>

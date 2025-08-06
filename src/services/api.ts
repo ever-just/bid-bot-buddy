@@ -70,64 +70,123 @@ class ApiService {
 
   async scrapeRFP(url: string): Promise<ScrapeResult> {
     try {
-      console.log('🕷️ Starting Python/Playwright web scraping for:', url);
+      console.log('🕷️ Starting advanced scraping system for:', url);
       
-      // Use the robust Python Flask backend
-      const response = await fetch(`${this.baseUrl}/api/scrape`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Primary: Browserless.io for complex sites and authentication barriers
+      console.log('🚀 Attempting Browserless.io scraping (primary)...');
+      const browserlessResult = await this.scrapeWithBrowserless(url);
+      
+      if (browserlessResult.status === 'success' && 
+          (browserlessResult.content?.text?.full_text?.length || 0) > 200) {
+        console.log('✅ Browserless.io scraping successful!');
+        return browserlessResult;
       }
 
-      const data = await response.json();
-
-      if (data.status === 'error') {
-        console.error('❌ Python scraping failed:', data.error);
-        throw new Error(data.error || 'Failed to scrape URL with Python backend');
-      }
+      console.log('⚠️ Browserless.io insufficient, trying enhanced scraper fallback...');
       
-      console.log('✅ Python/Playwright web scraping successful:', {
-        title: data.title,
-        textLength: data.content?.text?.full_text?.length || 0,
-        url: data.url,
-        strategy: 'python-playwright'
-      });
+      // Fallback 1: Enhanced Supabase edge function
+      const enhancedResult = await this.scrapeWithEnhanced(url);
+      
+      if (enhancedResult.status === 'success' && 
+          (enhancedResult.content?.text?.full_text?.length || 0) > 200) {
+        console.log('✅ Enhanced scraper fallback successful!');
+        return enhancedResult;
+      }
 
-      return data;
+      console.log('⚠️ Enhanced scraper insufficient, trying basic scraper fallback...');
+      
+      // Fallback 2: Basic scraper
+      const basicResult = await this.scrapeWithBasic(url);
+      
+      if (basicResult.status === 'success') {
+        console.log('✅ Basic scraper fallback completed');
+        return basicResult;
+      }
+
+      // All methods failed
+      return {
+        status: 'error',
+        url: url,
+        error: 'All scraping methods failed. The page may have severe access restrictions or require manual authentication.'
+      };
       
     } catch (error) {
-      console.error('❌ Error in Python scraping system:', error);
+      console.error('❌ Error in advanced scraping system:', error);
       
-      // Fallback to Supabase edge function if Python backend is not available
-      console.log('🔄 Falling back to Supabase edge function...');
-      try {
-        const { supabase } = await import('@/integrations/supabase/client');
-        
-        const { data, error: supabaseError } = await supabase.functions.invoke('advanced-scraper', {
-          body: { url }
-        });
+      return {
+        status: 'error',
+        url: url,
+        error: error instanceof Error ? error.message : 'Advanced scraping system failed'
+      };
+    }
+  }
 
-        if (supabaseError) {
-          throw new Error(supabaseError.message || 'Fallback scraping failed');
-        }
+  private async scrapeWithBrowserless(url: string): Promise<ScrapeResult> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase.functions.invoke('browserless-scraper', {
+        body: { url }
+      });
 
-        console.log('✅ Fallback scraping successful');
-        return data;
-      } catch (fallbackError) {
-        console.error('❌ Fallback scraping also failed:', fallbackError);
-        
-        return {
-          status: 'error',
-          url: url,
-          error: error instanceof Error ? error.message : 'Both Python backend and fallback scraping failed'
-        };
+      if (error) {
+        throw new Error(error.message || 'Browserless scraper failed');
       }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Browserless scraper error:', error);
+      return {
+        status: 'error',
+        url: url,
+        error: error instanceof Error ? error.message : 'Browserless scraper failed'
+      };
+    }
+  }
+
+  private async scrapeWithEnhanced(url: string): Promise<ScrapeResult> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase.functions.invoke('advanced-scraper', {
+        body: { url }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Enhanced scraper failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Enhanced scraper error:', error);
+      return {
+        status: 'error',
+        url: url,
+        error: error instanceof Error ? error.message : 'Enhanced scraper failed'
+      };
+    }
+  }
+
+  private async scrapeWithBasic(url: string): Promise<ScrapeResult> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase.functions.invoke('web-scraper', {
+        body: { url }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Basic scraper failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Basic scraper error:', error);
+      return {
+        status: 'error',
+        url: url,
+        error: error instanceof Error ? error.message : 'Basic scraper failed'
+      };
     }
   }
 
