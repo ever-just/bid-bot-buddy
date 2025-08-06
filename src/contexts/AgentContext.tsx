@@ -106,7 +106,7 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const startAnalysis = async (rfpData: ScrapeResult) => {
     const startTime = Date.now();
-    console.log('🎯 Starting RFP analysis at:', new Date(startTime).toISOString());
+    console.log('🎯 Starting REAL-TIME RFP analysis at:', new Date(startTime).toISOString());
 
     setState(prev => ({
       ...prev,
@@ -123,36 +123,33 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }))
     }));
 
-    let progressIntervals: NodeJS.Timeout[] = [];
-
     try {
-      // Start visual progress simulation for better UX
-      progressIntervals = anthropicAgentService.simulateProgressUpdates(
+      // Use real-time WebSocket service instead of simulation
+      console.log('🔄 Calling real Anthropic API with WebSocket updates...');
+      const results = await anthropicAgentService.analyzeRFPWithAgents(
+        rfpData,
+        // Real-time progress callback
         (agentId, progress, status, result) => {
+          console.log(`📊 Real progress update - Agent ${agentId}: ${progress}% (${status})`);
+          
           updateAgentProgress(agentId, progress, status);
+          
           if (result && status === 'completed') {
             setState(prev => ({
               ...prev,
               agents: prev.agents.map(agent =>
                 agent.id === agentId
-                  ? { ...agent, result: result.substring(0, 100) + '...' }
+                  ? { ...agent, result: result.length > 200 ? result.substring(0, 200) + '...' : result }
                   : agent
               )
             }));
           }
         }
       );
-
-      // Run actual Anthropic analysis
-      console.log('🔄 Calling real Anthropic API...');
-      const results = await anthropicAgentService.analyzeRFPWithAgents(rfpData);
-      
-      // Clear progress simulation intervals
-      anthropicAgentService.clearProgressIntervals(progressIntervals);
       
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
-      console.log(`⏱️ Analysis completed in ${duration.toFixed(1)} seconds`);
+      console.log(`⏱️ REAL analysis completed in ${duration.toFixed(1)} seconds`);
       
       // Update with real results from Claude
       setState(prev => ({
@@ -183,13 +180,13 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         })
       }));
 
-      console.log('🎉 RFP analysis completed successfully!');
+      console.log('🎉 Real-time RFP analysis completed successfully!');
 
     } catch (error) {
-      console.error('💥 Analysis failed:', error);
+      console.error('💥 Real-time analysis failed:', error);
       
-      // Clear any running intervals
-      anthropicAgentService.clearProgressIntervals(progressIntervals);
+      // Ensure cleanup
+      anthropicAgentService.disconnect();
       
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
@@ -222,6 +219,9 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const resetState = () => {
     console.log('🔄 Resetting agent state');
+    // Ensure WebSocket is disconnected
+    anthropicAgentService.disconnect();
+    
     setState({
       ...initialState,
       agents: initialAgents.map(agent => ({ ...agent })) // Deep copy

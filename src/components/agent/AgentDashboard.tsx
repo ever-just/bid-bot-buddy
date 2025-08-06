@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useAgent } from "@/contexts/AgentContext";
+import { useState, useEffect } from "react";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -40,13 +41,41 @@ const getIconComponent = (iconName: string) => {
 
 const AgentDashboard = () => {
   const { state } = useAgent();
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Real-time elapsed time counter
+  useEffect(() => {
+    if (!state.isProcessing || !state.processingStartTime) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - state.processingStartTime!) / 1000);
+      setElapsedTime(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [state.isProcessing, state.processingStartTime]);
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold mb-2">AI Agent Dashboard</h2>
+        <h2 className="text-3xl font-bold mb-2">Real-Time AI Agent Dashboard</h2>
         <p className="text-muted-foreground">
-          Track the progress of our 6 specialized AI agents working on your RFP
+          Track live progress of 6 Claude AI agents analyzing your RFP
         </p>
+        {state.isProcessing && (
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></div>
+            <span className="text-sm text-blue-600 font-medium">
+              Processing... {formatTime(elapsedTime)}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -86,6 +115,13 @@ const AgentDashboard = () => {
                     </p>
                   </div>
                 )}
+
+                {agent.status === 'running' && (
+                  <div className="flex items-center gap-2 text-sm text-blue-600">
+                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></div>
+                    <span>Claude AI processing...</span>
+                  </div>
+                )}
               </div>
             </Card>
           );
@@ -100,12 +136,22 @@ const AgentDashboard = () => {
             <span>{Math.round(state.agents.reduce((acc, agent) => acc + agent.progress, 0) / state.agents.length)}%</span>
           </div>
           <Progress value={Math.round(state.agents.reduce((acc, agent) => acc + agent.progress, 0) / state.agents.length)} className="h-3" />
-          <p className="text-sm text-muted-foreground">
-            {state.isProcessing ? 
-              `Processing... ${state.agents.filter(a => a.status === 'completed').length}/${state.agents.length} agents completed` :
-              state.currentStep === 'completed' ? 'All agents completed!' : 'Ready to start analysis'
-            }
-          </p>
+          
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              {state.isProcessing ? 
+                `Real-time processing... ${state.agents.filter(a => a.status === 'completed').length}/${state.agents.length} agents completed` :
+                state.currentStep === 'completed' ? 'All agents completed!' : 'Ready to start real-time analysis'
+              }
+            </p>
+            
+            {state.isProcessing && (
+              <div className="text-right text-sm">
+                <div className="text-muted-foreground">Elapsed: {formatTime(elapsedTime)}</div>
+                <div className="text-xs text-muted-foreground">Est. 2-3 minutes total</div>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
     </div>
