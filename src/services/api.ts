@@ -64,47 +64,70 @@ interface RFPAnalysis {
 }
 
 class ApiService {
-  private baseUrl = 'http://localhost:8080';
+  private baseUrl = process.env.NODE_ENV === 'production' 
+    ? 'https://your-python-backend.herokuapp.com' // Update with actual production URL
+    : 'http://localhost:8080';
 
   async scrapeRFP(url: string): Promise<ScrapeResult> {
     try {
-      console.log('🕷️ Starting hybrid web scraping for:', url);
+      console.log('🕷️ Starting Python/Playwright web scraping for:', url);
       
-      // Use the existing Supabase client from the integration
-      const { supabase } = await import('@/integrations/supabase/client');
-      
-      // Use the new advanced scraper edge function with proper authorization
-      const { data, error } = await supabase.functions.invoke('advanced-scraper', {
-        body: { url }
+      // Use the robust Python Flask backend
+      const response = await fetch(`${this.baseUrl}/api/scrape`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url })
       });
 
-      if (error) {
-        console.error('❌ Supabase function error:', error);
-        throw new Error(error.message || 'Failed to invoke advanced scraper');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      const data = await response.json();
+
       if (data.status === 'error') {
-        console.error('❌ Hybrid scraping failed:', data.error);
-        throw new Error(data.error || 'Failed to scrape URL with hybrid approach');
+        console.error('❌ Python scraping failed:', data.error);
+        throw new Error(data.error || 'Failed to scrape URL with Python backend');
       }
       
-      console.log('✅ Hybrid web scraping successful:', {
+      console.log('✅ Python/Playwright web scraping successful:', {
         title: data.title,
         textLength: data.content?.text?.full_text?.length || 0,
         url: data.url,
-        strategy: data.strategy || 'hybrid'
+        strategy: 'python-playwright'
       });
 
       return data;
       
     } catch (error) {
-      console.error('❌ Error in hybrid scraping system:', error);
+      console.error('❌ Error in Python scraping system:', error);
       
-      return {
-        status: 'error',
-        url: url,
-        error: error instanceof Error ? error.message : 'Failed to scrape the URL with advanced methods'
-      };
+      // Fallback to Supabase edge function if Python backend is not available
+      console.log('🔄 Falling back to Supabase edge function...');
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        
+        const { data, error: supabaseError } = await supabase.functions.invoke('advanced-scraper', {
+          body: { url }
+        });
+
+        if (supabaseError) {
+          throw new Error(supabaseError.message || 'Fallback scraping failed');
+        }
+
+        console.log('✅ Fallback scraping successful');
+        return data;
+      } catch (fallbackError) {
+        console.error('❌ Fallback scraping also failed:', fallbackError);
+        
+        return {
+          status: 'error',
+          url: url,
+          error: error instanceof Error ? error.message : 'Both Python backend and fallback scraping failed'
+        };
+      }
     }
   }
 
@@ -121,7 +144,6 @@ class ApiService {
     }
   }
 
-  // Simulate AI analysis of scraped content
   analyzeRFPContent(scrapedContent: ScrapeResult): RFPAnalysis {
     const text = scrapedContent.content?.text?.full_text || '';
     const headings = scrapedContent.content?.text?.headings || [];

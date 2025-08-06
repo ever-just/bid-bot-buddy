@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Upload, Link as LinkIcon, FileText, Globe, Loader2, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,11 +31,11 @@ const RFPInput = () => {
 
     setIsLoading(true);
     setScrapingStage('connecting');
-    setScrapingStatus("Initializing hybrid scraping system...");
+    setScrapingStatus("Initializing Python/Playwright scraper...");
     
     try {
       setScrapingStage('scraping');
-      setScrapingStatus("Advanced scraping with authentication handling...");
+      setScrapingStatus("Advanced browser automation with Python/Playwright...");
       
       const result = await apiService.scrapeRFP(rfpUrl);
       
@@ -50,17 +49,17 @@ const RFPInput = () => {
       
       // Validate that we got actual content
       const contentLength = result.content?.text?.full_text?.length || 0;
-      if (contentLength < 100) {
+      if (contentLength < 50) {
         setScrapingStage('error');
-        throw new Error('Very little content was extracted from this URL. The page may require authentication or have access restrictions.');
+        throw new Error('Very little content was extracted from this URL. The page may be empty or have severe access restrictions.');
       }
 
       setScrapingStage('success');
-      setScrapingStatus(`Successfully extracted ${contentLength} characters using hybrid approach!`);
+      setScrapingStatus(`Successfully extracted ${contentLength} characters using Python/Playwright!`);
 
       toast({
         title: "RFP Content Extracted",
-        description: `Successfully extracted ${contentLength} characters using advanced scraping. Starting Claude AI analysis...`,
+        description: `Successfully extracted ${contentLength} characters using Python/Playwright. Starting Claude AI analysis...`,
       });
 
       startAnalysis(result);
@@ -72,7 +71,7 @@ const RFPInput = () => {
       
       toast({
         title: "Scraping Failed",
-        description: error instanceof Error ? error.message : "Failed to extract content from the URL using our advanced scraping methods. Please check the URL and try again.",
+        description: error instanceof Error ? error.message : "Failed to extract content from the URL. Please check the URL and try again.",
         variant: "destructive",
       });
     } finally {
@@ -123,11 +122,11 @@ const RFPInput = () => {
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Submit Your RFP</h2>
         <p className="text-muted-foreground">
-          Advanced web scraping with authentication handling + Claude AI multi-agent analysis
+          Python/Playwright browser automation + Claude AI multi-agent analysis
         </p>
         <div className="flex items-center justify-center gap-2 mt-2">
           <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-          <span className="text-sm text-primary font-medium">Hybrid scraping system + Real-time Claude AI</span>
+          <span className="text-sm text-primary font-medium">Python/Playwright + Real-time Claude AI</span>
         </div>
       </div>
 
@@ -185,11 +184,12 @@ const RFPInput = () => {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Advanced Hybrid Scraping System:</p>
-                    <p>• 🔒 Handles authentication barriers and JavaScript requirements</p>
-                    <p>• 🌐 Advanced browser simulation with smart fallback</p>
-                    <p>• ⚡ Real-time content validation and extraction</p>
+                    <p className="font-medium">Python/Playwright Web Scraping System:</p>
+                    <p>• 🐍 Full Python backend with Playwright browser automation</p>
+                    <p>• 🔓 Handles complex authentication, JavaScript, and dynamic content</p>
+                    <p>• 📸 Screenshots and comprehensive content extraction</p>
                     <p>• 🤖 Seamless integration with 6 Claude AI agents</p>
+                    <p>• 🔄 Automatic fallback to edge functions if backend unavailable</p>
                   </div>
                 </div>
               </div>
