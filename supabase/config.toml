@@ -42,6 +42,9 @@ verify_jwt = false
 [functions.web-scraper]
 verify_jwt = false
 
+[functions.advanced-scraper]
+verify_jwt = false
+
 [edge-runtime]
 enabled = true
 port = 54327

@@ -1,4 +1,3 @@
-
 interface ScrapeResult {
   status: string;
   url: string;
@@ -71,12 +70,8 @@ class ApiService {
     try {
       console.log('🕷️ Starting hybrid web scraping for:', url);
       
-      // Import Supabase client to get proper authorization headers
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabaseUrl = 'https://dywlonihwrnutwvzqivo.supabase.co';
-      const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5d2xvbmlod3JudXR3dnpxaXZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4OTQzMjEsImV4cCI6MjA1MjQ3MDMyMX0.pCYk0wprdM2xZHVQ1dXZJ3SHs9hBY5p0L75g3lfDfGg';
-      
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      // Use the existing Supabase client from the integration
+      const { supabase } = await import('@/integrations/supabase/client');
       
       // Use the new advanced scraper edge function with proper authorization
       const { data, error } = await supabase.functions.invoke('advanced-scraper', {
