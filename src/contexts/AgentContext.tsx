@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { ScrapeResult, RFPAnalysis } from '@/services/api';
 import { anthropicAgentService, AnthropicAgentResult } from '@/services/anthropicAgentService';
+import { databaseService } from '@/services/databaseService';
 
 interface AgentState {
   currentStep: 'input' | 'processing' | 'completed';
@@ -12,6 +13,7 @@ interface AgentState {
   isProcessing: boolean;
   error: string | null;
   processingStartTime: number | null;
+  analysisId: string | null;
 }
 
 interface AgentProgress {
@@ -99,6 +101,7 @@ const initialState: AgentState = {
   isProcessing: false,
   error: null,
   processingStartTime: null,
+  analysisId: null,
 };
 
 export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -108,6 +111,9 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const startTime = Date.now();
     console.log('🎯 Starting REAL-TIME RFP analysis at:', new Date(startTime).toISOString());
 
+    // Get the analysis ID from the scraped content if available
+    let analysisId = state.analysisId;
+    
     setState(prev => ({
       ...prev,
       currentStep: 'processing',
@@ -150,6 +156,20 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const endTime = Date.now();
       const duration = (endTime - startTime) / 1000;
       console.log(`⏱️ REAL analysis completed in ${duration.toFixed(1)} seconds`);
+      
+      // Store the results in database if we have an analysis ID
+      if (analysisId) {
+        try {
+          await databaseService.storeAnthropicResults(analysisId, {
+            ...results,
+            total_processing_time: endTime - startTime
+          });
+          console.log('💾 Results stored in database successfully');
+        } catch (dbError) {
+          console.error('⚠️ Failed to store results in database:', dbError);
+          // Continue anyway - this is not critical for user experience
+        }
+      }
       
       // Update with real results from Claude
       setState(prev => ({

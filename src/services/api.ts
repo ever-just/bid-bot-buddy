@@ -78,29 +78,31 @@ class ApiService {
     ? 'https://your-python-backend.herokuapp.com'
     : 'http://localhost:8080';
 
-  private scrapingAttempts: ScrapingAttempt[] = [];
-
   async scrapeRFP(url: string): Promise<ScrapeResult> {
     console.log('🕷️ Starting intelligent scraping system for:', url);
     
     try {
+      // Create RFP analysis record in database
+      const analysisId = await this.createRFPAnalysis(url);
+      
       // Tier 1: Modern BrowserQL scraper (primary)
       console.log('🚀 Attempting BrowserQL scraping (Tier 1)...');
       const startTime = Date.now();
       const browserqlResult = await this.scrapeWithBrowserQL(url);
       
-      this.logScrapingAttempt({
-        timestamp: new Date().toISOString(),
+      await this.logScrapingAttempt({
         url,
         scraper_type: 'browserql',
         success: browserqlResult.status === 'success',
         content_length: browserqlResult.content?.text?.full_text?.length || 0,
-        error: browserqlResult.error,
-        duration_ms: Date.now() - startTime
+        error_message: browserqlResult.error,
+        duration_ms: Date.now() - startTime,
+        response_data: browserqlResult
       });
       
       if (browserqlResult.status === 'success' && this.isQualityContent(browserqlResult)) {
         console.log('✅ BrowserQL scraping successful with quality content!');
+        await this.updateRFPAnalysis(analysisId, browserqlResult, 'success');
         return browserqlResult;
       }
 
@@ -110,18 +112,19 @@ class ApiService {
       const enhancedStartTime = Date.now();
       const enhancedResult = await this.scrapeWithEnhanced(url);
       
-      this.logScrapingAttempt({
-        timestamp: new Date().toISOString(),
+      await this.logScrapingAttempt({
         url,
         scraper_type: 'enhanced',
         success: enhancedResult.status === 'success',
         content_length: enhancedResult.content?.text?.full_text?.length || 0,
-        error: enhancedResult.error,
-        duration_ms: Date.now() - enhancedStartTime
+        error_message: enhancedResult.error,
+        duration_ms: Date.now() - enhancedStartTime,
+        response_data: enhancedResult
       });
       
       if (enhancedResult.status === 'success' && this.isQualityContent(enhancedResult)) {
         console.log('✅ Enhanced scraper successful with quality content!');
+        await this.updateRFPAnalysis(analysisId, enhancedResult, 'success');
         return enhancedResult;
       }
 
@@ -131,24 +134,25 @@ class ApiService {
       const basicStartTime = Date.now();
       const basicResult = await this.scrapeWithBasic(url);
       
-      this.logScrapingAttempt({
-        timestamp: new Date().toISOString(),
+      await this.logScrapingAttempt({
         url,
         scraper_type: 'basic',
         success: basicResult.status === 'success',
         content_length: basicResult.content?.text?.full_text?.length || 0,
-        error: basicResult.error,
-        duration_ms: Date.now() - basicStartTime
+        error_message: basicResult.error,
+        duration_ms: Date.now() - basicStartTime,
+        response_data: basicResult
       });
       
       if (basicResult.status === 'success') {
         console.log('✅ Basic scraper completed (minimal content)');
+        await this.updateRFPAnalysis(analysisId, basicResult, 'completed');
         return basicResult;
       }
 
       // All tiers failed
       console.log('❌ All scraping tiers failed');
-      return {
+      const failureResult = {
         status: 'error',
         url: url,
         error: 'All scraping methods failed. The page may have severe access restrictions or require manual authentication.',
@@ -158,6 +162,9 @@ class ApiService {
           'failure_reason': 'complete_failure'
         }
       };
+
+      await this.updateRFPAnalysis(analysisId, failureResult, 'error', 'All scraping methods failed');
+      return failureResult;
       
     } catch (error) {
       console.error('❌ Error in intelligent scraping system:', error);
@@ -167,6 +174,104 @@ class ApiService {
         url: url,
         error: error instanceof Error ? error.message : 'Intelligent scraping system failed'
       };
+    }
+  }
+
+  private async createRFPAnalysis(url: string): Promise<string> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { data, error } = await supabase
+        .from('rfp_analyses')
+        .insert({
+          url,
+          status: 'processing'
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('Failed to create RFP analysis record:', error);
+        throw error;
+      }
+
+      return data.id;
+    } catch (error) {
+      console.error('Database error creating RFP analysis:', error);
+      // Return a temporary ID if database fails
+      return crypto.randomUUID();
+    }
+  }
+
+  private async updateRFPAnalysis(
+    analysisId: string, 
+    scrapedContent: ScrapeResult, 
+    status: string,
+    errorMessage?: string
+  ): Promise<void> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const updateData: any = {
+        status,
+        scraped_content: scrapedContent,
+        title: scrapedContent.title,
+        updated_at: new Date().toISOString()
+      };
+
+      if (errorMessage) {
+        updateData.error_message = errorMessage;
+      }
+
+      const { error } = await supabase
+        .from('rfp_analyses')
+        .update(updateData)
+        .eq('id', analysisId);
+
+      if (error) {
+        console.error('Failed to update RFP analysis:', error);
+      }
+    } catch (error) {
+      console.error('Database error updating RFP analysis:', error);
+    }
+  }
+
+  private async logScrapingAttempt(attempt: {
+    url: string;
+    scraper_type: 'browserql' | 'enhanced' | 'basic';
+    success: boolean;
+    content_length: number;
+    error_message?: string;
+    duration_ms: number;
+    response_data: any;
+  }): Promise<void> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      const { error } = await supabase
+        .from('scraping_attempts')
+        .insert({
+          url: attempt.url,
+          scraper_type: attempt.scraper_type,
+          success: attempt.success,
+          content_length: attempt.content_length,
+          error_message: attempt.error_message,
+          duration_ms: attempt.duration_ms,
+          response_data: attempt.response_data
+        });
+
+      if (error) {
+        console.error('Failed to log scraping attempt:', error);
+      } else {
+        console.log('📝 Scraping attempt logged to database:', {
+          scraper: attempt.scraper_type,
+          success: attempt.success,
+          contentLength: attempt.content_length,
+          duration: `${attempt.duration_ms}ms`
+        });
+      }
+    } catch (error) {
+      console.error('Database error logging scraping attempt:', error);
     }
   }
 
@@ -187,21 +292,6 @@ class ApiService {
     });
     
     return isHighQuality || isMediumQuality;
-  }
-
-  private logScrapingAttempt(attempt: ScrapingAttempt): void {
-    this.scrapingAttempts.push(attempt);
-    console.log('📝 Scraping attempt logged:', {
-      scraper: attempt.scraper_type,
-      success: attempt.success,
-      contentLength: attempt.content_length,
-      duration: `${attempt.duration_ms}ms`
-    });
-    
-    // Keep only last 10 attempts in memory
-    if (this.scrapingAttempts.length > 10) {
-      this.scrapingAttempts = this.scrapingAttempts.slice(-10);
-    }
   }
 
   private async scrapeWithBrowserQL(url: string): Promise<ScrapeResult> {
@@ -275,36 +365,64 @@ class ApiService {
     }
   }
 
-  // Get scraping performance metrics
-  getScrapingMetrics(): {
+  // Get scraping performance metrics from database
+  async getScrapingMetrics(): Promise<{
     totalAttempts: number;
     successRate: number;
     averageDuration: number;
     scraperPerformance: Record<string, { attempts: number; successRate: number }>;
-  } {
-    const totalAttempts = this.scrapingAttempts.length;
-    const successfulAttempts = this.scrapingAttempts.filter(a => a.success).length;
-    const successRate = totalAttempts > 0 ? (successfulAttempts / totalAttempts) * 100 : 0;
-    const averageDuration = totalAttempts > 0 
-      ? this.scrapingAttempts.reduce((sum, a) => sum + a.duration_ms, 0) / totalAttempts 
-      : 0;
+  }> {
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      
+      // Get all scraping attempts from the last 30 days
+      const { data: attempts, error } = await supabase
+        .from('scraping_attempts')
+        .select('*')
+        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
 
-    const scraperPerformance: Record<string, { attempts: number; successRate: number }> = {};
-    ['browserql', 'enhanced', 'basic'].forEach(scraper => {
-      const attempts = this.scrapingAttempts.filter(a => a.scraper_type === scraper);
-      const successful = attempts.filter(a => a.success);
-      scraperPerformance[scraper] = {
-        attempts: attempts.length,
-        successRate: attempts.length > 0 ? (successful.length / attempts.length) * 100 : 0
+      if (error || !attempts) {
+        console.error('Failed to fetch scraping metrics:', error);
+        return {
+          totalAttempts: 0,
+          successRate: 0,
+          averageDuration: 0,
+          scraperPerformance: {}
+        };
+      }
+
+      const totalAttempts = attempts.length;
+      const successfulAttempts = attempts.filter(a => a.success).length;
+      const successRate = totalAttempts > 0 ? (successfulAttempts / totalAttempts) * 100 : 0;
+      const averageDuration = totalAttempts > 0 
+        ? attempts.reduce((sum, a) => sum + a.duration_ms, 0) / totalAttempts 
+        : 0;
+
+      const scraperPerformance: Record<string, { attempts: number; successRate: number }> = {};
+      ['browserql', 'enhanced', 'basic'].forEach(scraper => {
+        const scraperAttempts = attempts.filter(a => a.scraper_type === scraper);
+        const successful = scraperAttempts.filter(a => a.success);
+        scraperPerformance[scraper] = {
+          attempts: scraperAttempts.length,
+          successRate: scraperAttempts.length > 0 ? (successful.length / scraperAttempts.length) * 100 : 0
+        };
+      });
+
+      return {
+        totalAttempts,
+        successRate,
+        averageDuration,
+        scraperPerformance
       };
-    });
-
-    return {
-      totalAttempts,
-      successRate,
-      averageDuration,
-      scraperPerformance
-    };
+    } catch (error) {
+      console.error('Error fetching scraping metrics:', error);
+      return {
+        totalAttempts: 0,
+        successRate: 0,
+        averageDuration: 0,
+        scraperPerformance: {}
+      };
+    }
   }
 
   async checkHealth(): Promise<{ status: string; timestamp: string; version: string }> {

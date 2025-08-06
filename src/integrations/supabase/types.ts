@@ -10,11 +10,141 @@ export type Database = {
   // Allows to automatically instanciate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.12 (cd3cf9e)"
+    PostgrestVersion: "13.0.4"
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agent_sessions: {
+        Row: {
+          agent_id: number
+          agent_name: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          processing_time_ms: number | null
+          progress: number | null
+          result: string | null
+          rfp_analysis_id: string | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          agent_id: number
+          agent_name: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          processing_time_ms?: number | null
+          progress?: number | null
+          result?: string | null
+          rfp_analysis_id?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          agent_id?: number
+          agent_name?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          processing_time_ms?: number | null
+          progress?: number | null
+          result?: string | null
+          rfp_analysis_id?: string | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_sessions_rfp_analysis_id_fkey"
+            columns: ["rfp_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "rfp_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rfp_analyses: {
+        Row: {
+          agents_completed: number | null
+          analysis_results: Json | null
+          anthropic_results: Json | null
+          created_at: string
+          error_message: string | null
+          id: string
+          processing_time_ms: number | null
+          scraped_content: Json | null
+          status: string
+          title: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          agents_completed?: number | null
+          analysis_results?: Json | null
+          anthropic_results?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processing_time_ms?: number | null
+          scraped_content?: Json | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          agents_completed?: number | null
+          analysis_results?: Json | null
+          anthropic_results?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processing_time_ms?: number | null
+          scraped_content?: Json | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      scraping_attempts: {
+        Row: {
+          content_length: number | null
+          created_at: string
+          duration_ms: number
+          error_message: string | null
+          id: string
+          response_data: Json | null
+          scraper_type: string
+          success: boolean
+          url: string
+        }
+        Insert: {
+          content_length?: number | null
+          created_at?: string
+          duration_ms: number
+          error_message?: string | null
+          id?: string
+          response_data?: Json | null
+          scraper_type: string
+          success?: boolean
+          url: string
+        }
+        Update: {
+          content_length?: number | null
+          created_at?: string
+          duration_ms?: number
+          error_message?: string | null
+          id?: string
+          response_data?: Json | null
+          scraper_type?: string
+          success?: boolean
+          url?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
