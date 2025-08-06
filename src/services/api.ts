@@ -71,34 +71,36 @@ class ApiService {
     try {
       console.log('🕷️ Starting hybrid web scraping for:', url);
       
-      // Use the new advanced scraper edge function with fallback logic
-      const response = await fetch(`https://dywlonihwrnutwvzqivo.functions.supabase.co/advanced-scraper`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
+      // Import Supabase client to get proper authorization headers
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseUrl = 'https://dywlonihwrnutwvzqivo.supabase.co';
+      const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5d2xvbmlod3JudXR3dnpxaXZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4OTQzMjEsImV4cCI6MjA1MjQ3MDMyMX0.pCYk0wprdM2xZHVQ1dXZJ3SHs9hBY5p0L75g3lfDfGg';
+      
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      // Use the new advanced scraper edge function with proper authorization
+      const { data, error } = await supabase.functions.invoke('advanced-scraper', {
+        body: { url }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (error) {
+        console.error('❌ Supabase function error:', error);
+        throw new Error(error.message || 'Failed to invoke advanced scraper');
       }
 
-      const result = await response.json();
-      
-      if (result.status === 'error') {
-        console.error('❌ Hybrid scraping failed:', result.error);
-        throw new Error(result.error || 'Failed to scrape URL with hybrid approach');
+      if (data.status === 'error') {
+        console.error('❌ Hybrid scraping failed:', data.error);
+        throw new Error(data.error || 'Failed to scrape URL with hybrid approach');
       }
       
       console.log('✅ Hybrid web scraping successful:', {
-        title: result.title,
-        textLength: result.content?.text?.full_text?.length || 0,
-        url: result.url,
-        strategy: result.strategy || 'hybrid'
+        title: data.title,
+        textLength: data.content?.text?.full_text?.length || 0,
+        url: data.url,
+        strategy: data.strategy || 'hybrid'
       });
 
-      return result;
+      return data;
       
     } catch (error) {
       console.error('❌ Error in hybrid scraping system:', error);
