@@ -128,7 +128,11 @@ class DatabaseService {
         throw error;
       }
 
-      return data || [];
+      // Type-cast the status field to ensure it matches our interface
+      return (data || []).map(session => ({
+        ...session,
+        status: session.status as 'pending' | 'running' | 'completed' | 'error'
+      }));
     } catch (error) {
       console.error('Database error fetching agent sessions:', error);
       return [];
