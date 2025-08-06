@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -65,56 +64,90 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
   console.log('🚀 Starting Browserless.io scraping for:', url);
   
   try {
-    // Use the correct Browserless.io endpoint with token as query parameter
-    const browserlessUrl = `https://chrome.browserless.io/content?token=${apiKey}`;
+    // Use the correct production endpoint
+    const browserlessUrl = `https://production-sfo.browserless.io/content?token=${apiKey}`;
     
     const requestBody = {
       url: url,
       gotoOptions: {
         waitUntil: 'networkidle2',
-        timeout: 30000
+        timeout: 60000 // Increased timeout for complex sites
       },
       addScriptTag: [{
         content: `
-          // Wait for dynamic content to load
+          // Wait for dynamic content and forms to load
           setTimeout(() => {
+            // Try to interact with any login prompts or continue buttons
+            const continueBtn = document.querySelector('input[type="submit"], button[type="submit"], .btn-primary, [onclick*="continue"]');
+            if (continueBtn && continueBtn.offsetParent !== null) {
+              continueBtn.click();
+            }
             window.browserlessReady = true;
-          }, 3000);
+          }, 5000);
         `
       }],
       waitForFunction: {
         fn: '() => window.browserlessReady === true',
-        timeout: 5000
+        timeout: 10000
       },
       setUserAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      setCookie: [],
+      setCookie: [
+        {
+          name: 'session_id',
+          value: 'guest_session_' + Date.now(),
+          domain: new URL(url).hostname
+        }
+      ],
       viewport: {
         width: 1920,
         height: 1080
-      }
+      },
+      // Add authentication and session handling options
+      rejectRequestPattern: [],
+      requestInterceptors: [{
+        pattern: '**',
+        response: {
+          headers: {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive'
+          }
+        }
+      }]
     };
 
-    console.log('📡 Making request to Browserless.io...');
+    console.log('📡 Making request to production Browserless.io endpoint...');
+    console.log('🔗 Endpoint URL:', browserlessUrl);
     
     const response = await fetch(browserlessUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
       },
       body: JSON.stringify(requestBody)
     });
 
     console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Browserless API error response:', errorText);
       
-      // Check for common error patterns
+      // Enhanced error handling
       if (response.status === 401) {
         throw new Error('Browserless API key is invalid or expired');
       } else if (response.status === 402) {
         throw new Error('Browserless account has exceeded usage limits');
+      } else if (response.status === 403) {
+        throw new Error('Access forbidden. Check API key permissions and endpoint URL');
+      } else if (response.status === 404) {
+        throw new Error('Browserless endpoint not found. Verify the correct API endpoint');
+      } else if (response.status === 429) {
+        throw new Error('Browserless rate limit exceeded. Please try again later');
       } else if (response.status === 500) {
         throw new Error('Browserless service is temporarily unavailable');
       } else {
@@ -124,9 +157,10 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
 
     const htmlContent = await response.text();
     console.log('✅ HTML content received, length:', htmlContent.length);
+    console.log('📝 First 200 characters:', htmlContent.substring(0, 200));
 
-    if (!htmlContent || htmlContent.length < 50) {
-      throw new Error('No meaningful content extracted from the page');
+    if (!htmlContent || htmlContent.length < 100) {
+      throw new Error('Insufficient content extracted from the page. The site may require authentication or have access restrictions.');
     }
 
     // Transform HTML content to our standard format
@@ -249,7 +283,7 @@ async function transformHtmlContent(htmlContent: string, originalUrl: string): P
       }
     }
 
-    // Extract forms (simplified)
+    // Extract forms
     const formRegex = /<form[^>]*(?:action=["']([^"']*)["'])?[^>]*>([\s\S]*?)<\/form>/gi;
     const forms: Array<{
       action: string;
@@ -266,7 +300,6 @@ async function transformHtmlContent(htmlContent: string, originalUrl: string): P
       const action = formMatch[1] || originalUrl;
       const formContent = formMatch[2];
       
-      // Extract inputs from this form
       const inputRegex = /<input[^>]*(?:type=["']([^"']*)["'])?[^>]*(?:name=["']([^"']*)["'])?[^>]*(?:placeholder=["']([^"']*)["'])?[^>]*(?:(required))?[^>]*>/gi;
       const inputs: Array<{
         type: string;
@@ -314,7 +347,7 @@ async function transformHtmlContent(htmlContent: string, originalUrl: string): P
       }
     }
 
-    // Extract tables (simplified)
+    // Extract tables
     const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
     const tables: Array<{
       headers: string[];
@@ -325,7 +358,6 @@ async function transformHtmlContent(htmlContent: string, originalUrl: string): P
     while ((tableMatch = tableRegex.exec(htmlContent)) !== null) {
       const tableContent = tableMatch[1];
       
-      // Extract headers
       const headerRegex = /<th[^>]*>([^<]+)<\/th>/gi;
       const headers: string[] = [];
       let headerMatch;
@@ -333,7 +365,6 @@ async function transformHtmlContent(htmlContent: string, originalUrl: string): P
         headers.push(headerMatch[1].trim());
       }
       
-      // Extract rows
       const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
       const rows: string[][] = [];
       let rowMatch;
@@ -395,7 +426,8 @@ async function transformHtmlContent(htmlContent: string, originalUrl: string): P
         'scraper': 'browserless.io',
         'scraped_at': new Date().toISOString(),
         'user_agent': 'Browserless Chrome',
-        'content_length': htmlContent.length.toString()
+        'content_length': htmlContent.length.toString(),
+        'endpoint': 'production-sfo'
       },
       statistics: {
         total_links: links.length,
@@ -443,15 +475,27 @@ serve(async (req) => {
     }
 
     console.log('🎯 Browserless.io scraping initiated for:', url);
+    console.log('🔑 API key configured:', apiKey ? 'Yes' : 'No');
     
     const result = await scrapeWithBrowserless(url, apiKey);
 
-    // Final validation
+    // Enhanced validation and debugging
     if (result.status === 'success') {
       const contentLength = result.content?.text?.full_text?.length || 0;
-      if (contentLength < 100) {
+      console.log('📊 Content analysis:', {
+        contentLength,
+        hasTitle: !!result.title,
+        linksFound: result.content?.links?.length || 0,
+        formsFound: result.content?.forms?.length || 0,
+        headingsFound: result.content?.text?.headings?.length || 0
+      });
+      
+      if (contentLength < 200) {
         console.log('⚠️ Low content warning:', contentLength, 'characters');
-        result.meta = { ...result.meta, 'warning': 'Low content extracted' };
+        result.meta = { 
+          ...result.meta, 
+          'warning': 'Low content extracted - site may require authentication or have access restrictions' 
+        };
       }
     }
 
