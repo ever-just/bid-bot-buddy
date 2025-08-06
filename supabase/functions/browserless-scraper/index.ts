@@ -65,87 +65,72 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
   console.log('🚀 Starting Browserless.io scraping for:', url);
   
   try {
-    const browserlessUrl = 'https://chrome.browserless.io/scrape';
+    // Use the correct Browserless.io endpoint with token as query parameter
+    const browserlessUrl = `https://chrome.browserless.io/content?token=${apiKey}`;
     
-    const scrapeConfig = {
+    const requestBody = {
       url: url,
-      elements: [
-        {
-          selector: 'title',
-          attribute: 'text'
-        },
-        {
-          selector: 'h1, h2, h3, h4, h5, h6',
-          attribute: 'text'
-        },
-        {
-          selector: 'p',
-          attribute: 'text'
-        },
-        {
-          selector: 'a',
-          attribute: 'href'
-        },
-        {
-          selector: 'a',
-          attribute: 'text'
-        },
-        {
-          selector: 'img',
-          attribute: 'src'
-        },
-        {
-          selector: 'img',
-          attribute: 'alt'
-        },
-        {
-          selector: 'form',
-          attribute: 'action'
-        },
-        {
-          selector: 'input',
-          attribute: 'type'
-        },
-        {
-          selector: 'input',
-          attribute: 'name'
-        },
-        {
-          selector: 'input',
-          attribute: 'placeholder'
-        },
-        {
-          selector: 'table',
-          attribute: 'outerHTML'
-        },
-        {
-          selector: 'ul, ol',
-          attribute: 'outerHTML'
-        }
-      ],
-      wait: 3000, // Wait 3 seconds for dynamic content
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      gotoOptions: {
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      },
+      addScriptTag: [{
+        content: `
+          // Wait for dynamic content to load
+          setTimeout(() => {
+            window.browserlessReady = true;
+          }, 3000);
+        `
+      }],
+      waitForFunction: {
+        fn: '() => window.browserlessReady === true',
+        timeout: 5000
+      },
+      setUserAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      setCookie: [],
+      viewport: {
+        width: 1920,
+        height: 1080
+      }
     };
 
+    console.log('📡 Making request to Browserless.io...');
+    
     const response = await fetch(browserlessUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(scrapeConfig)
+      body: JSON.stringify(requestBody)
     });
+
+    console.log('📡 Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Browserless API error: ${response.status} - ${errorText}`);
+      console.error('❌ Browserless API error response:', errorText);
+      
+      // Check for common error patterns
+      if (response.status === 401) {
+        throw new Error('Browserless API key is invalid or expired');
+      } else if (response.status === 402) {
+        throw new Error('Browserless account has exceeded usage limits');
+      } else if (response.status === 500) {
+        throw new Error('Browserless service is temporarily unavailable');
+      } else {
+        throw new Error(`Browserless API error: ${response.status} - ${errorText}`);
+      }
     }
 
-    const browserlessData = await response.json();
-    console.log('✅ Browserless.io response received');
+    const htmlContent = await response.text();
+    console.log('✅ HTML content received, length:', htmlContent.length);
 
-    // Transform Browserless data to our standard format
-    const result = await transformBrowserlessData(browserlessData, url);
+    if (!htmlContent || htmlContent.length < 50) {
+      throw new Error('No meaningful content extracted from the page');
+    }
+
+    // Transform HTML content to our standard format
+    const result = await transformHtmlContent(htmlContent, url);
     
     console.log('✅ Browserless.io scraping successful:', {
       title: result.title?.substring(0, 50),
@@ -166,194 +151,269 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
   }
 }
 
-async function transformBrowserlessData(data: any, originalUrl: string): Promise<ScrapeResult> {
-  const elements = data.data || [];
+async function transformHtmlContent(htmlContent: string, originalUrl: string): Promise<ScrapeResult> {
+  console.log('🔄 Transforming HTML content...');
   
-  // Extract title
-  const titleElements = elements.filter((el: any) => el.selector === 'title');
-  const title = titleElements.length > 0 ? titleElements[0].text : 'Untitled';
+  try {
+    // Extract title
+    const titleMatch = htmlContent.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : 'Untitled';
 
-  // Extract headings
-  const headingElements = elements.filter((el: any) => 
-    el.selector.match(/^h[1-6]$/i) && el.text
-  );
-  const headings = headingElements.map((el: any) => ({
-    level: parseInt(el.selector.substring(1)),
-    text: el.text.trim()
-  }));
-
-  // Extract paragraphs
-  const paragraphElements = elements.filter((el: any) => 
-    el.selector === 'p' && el.text && el.text.trim().length > 20
-  );
-  const paragraphs = paragraphElements.map((el: any) => el.text.trim());
-
-  // Extract links
-  const linkHrefs = elements.filter((el: any) => el.selector === 'a' && el.href);
-  const linkTexts = elements.filter((el: any) => el.selector === 'a' && el.text);
-  
-  const links = linkHrefs.map((hrefEl: any, index: number) => {
-    const textEl = linkTexts[index];
-    const href = hrefEl.href;
-    const text = textEl?.text || href;
-    
-    let absolute_url = href;
-    try {
-      if (!href.startsWith('http')) {
-        const baseUrl = new URL(originalUrl);
-        if (href.startsWith('/')) {
-          absolute_url = `${baseUrl.origin}${href}`;
-        } else {
-          absolute_url = new URL(href, originalUrl).href;
-        }
-      }
-    } catch {
-      absolute_url = href;
-    }
-    
-    return {
-      text,
-      href,
-      absolute_url,
-      is_external: !absolute_url.includes(new URL(originalUrl).hostname)
-    };
-  }).filter(link => link.href && !link.href.startsWith('#') && !link.href.startsWith('javascript:'));
-
-  // Extract images
-  const imageSrcs = elements.filter((el: any) => el.selector === 'img' && el.src);
-  const imageAlts = elements.filter((el: any) => el.selector === 'img' && el.alt);
-  
-  const images = imageSrcs.map((srcEl: any, index: number) => {
-    const altEl = imageAlts[index];
-    const src = srcEl.src;
-    const alt = altEl?.alt || '';
-    
-    let absolute_url = src;
-    try {
-      if (!src.startsWith('http')) {
-        const baseUrl = new URL(originalUrl);
-        if (src.startsWith('/')) {
-          absolute_url = `${baseUrl.origin}${src}`;
-        } else {
-          absolute_url = new URL(src, originalUrl).href;
-        }
-      }
-    } catch {
-      absolute_url = src;
-    }
-    
-    return { src, absolute_url, alt };
-  });
-
-  // Extract forms (simplified)
-  const formElements = elements.filter((el: any) => el.selector === 'form' && el.action);
-  const inputTypes = elements.filter((el: any) => el.selector === 'input' && el.type);
-  const inputNames = elements.filter((el: any) => el.selector === 'input' && el.name);
-  const inputPlaceholders = elements.filter((el: any) => el.selector === 'input' && el.placeholder);
-  
-  const forms = formElements.map((formEl: any, formIndex: number) => {
-    const inputs = inputTypes.slice(formIndex * 5, (formIndex + 1) * 5).map((typeEl: any, inputIndex: number) => {
-      const nameEl = inputNames[formIndex * 5 + inputIndex];
-      const placeholderEl = inputPlaceholders[formIndex * 5 + inputIndex];
-      
-      return {
-        type: typeEl.type || 'text',
-        name: nameEl?.name || '',
-        placeholder: placeholderEl?.placeholder || '',
-        required: false
-      };
-    });
-    
-    return {
-      action: formEl.action || originalUrl,
-      method: 'GET',
-      inputs
-    };
-  });
-
-  // Extract lists
-  const listElements = elements.filter((el: any) => 
-    el.selector.match(/^[uo]l$/i) && el.outerHTML
-  );
-  const lists = listElements.map((el: any) => {
-    const type = el.selector.toLowerCase();
-    const html = el.outerHTML;
-    const itemMatches = html.match(/<li[^>]*>([^<]+)<\/li>/gi) || [];
-    const items = itemMatches.map((item: string) => {
-      const textMatch = item.match(/>([^<]+)</);
-      return textMatch ? textMatch[1].trim() : '';
-    }).filter((item: string) => item.length > 0);
-    
-    return { type, items };
-  });
-
-  // Extract tables (simplified)
-  const tableElements = elements.filter((el: any) => 
-    el.selector === 'table' && el.outerHTML
-  );
-  const tables = tableElements.map((el: any) => {
-    const html = el.outerHTML;
-    const headerMatches = html.match(/<th[^>]*>([^<]+)<\/th>/gi) || [];
-    const headers = headerMatches.map((header: string) => {
-      const textMatch = header.match(/>([^<]+)</);
-      return textMatch ? textMatch[1].trim() : '';
-    });
-    
-    const rowMatches = html.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
-    const rows = rowMatches.slice(1).map((row: string) => {
-      const cellMatches = row.match(/<td[^>]*>([^<]+)<\/td>/gi) || [];
-      return cellMatches.map((cell: string) => {
-        const textMatch = cell.match(/>([^<]+)</);
-        return textMatch ? textMatch[1].trim() : '';
+    // Extract headings
+    const headingRegex = /<h([1-6])[^>]*>([^<]+)<\/h[1-6]>/gi;
+    const headings: Array<{ level: number; text: string }> = [];
+    let headingMatch;
+    while ((headingMatch = headingRegex.exec(htmlContent)) !== null) {
+      headings.push({
+        level: parseInt(headingMatch[1]),
+        text: headingMatch[2].trim()
       });
-    });
-    
-    return {
-      headers,
-      rows,
-      total_rows: rows.length
-    };
-  });
-
-  // Create full text
-  const fullText = [
-    title,
-    ...headings.map(h => h.text),
-    ...paragraphs,
-    ...lists.flatMap(l => l.items)
-  ].join(' ');
-
-  return {
-    status: 'success',
-    url: originalUrl,
-    final_url: data.url || originalUrl,
-    title,
-    content: {
-      text: {
-        full_text: fullText,
-        headings,
-        paragraphs,
-        lists
-      },
-      links,
-      forms,
-      images,
-      tables,
-      navigation: []
-    },
-    meta: {
-      'scraper': 'browserless.io',
-      'scraped_at': new Date().toISOString(),
-      'user_agent': 'Browserless Chrome'
-    },
-    statistics: {
-      total_links: links.length,
-      total_forms: forms.length,
-      total_images: images.length,
-      total_tables: tables.length,
-      text_length: fullText.length
     }
-  };
+
+    // Extract paragraphs
+    const paragraphRegex = /<p[^>]*>([^<]+(?:<[^>]*>[^<]*<\/[^>]*>[^<]*)*)<\/p>/gi;
+    const paragraphs: string[] = [];
+    let paragraphMatch;
+    while ((paragraphMatch = paragraphRegex.exec(htmlContent)) !== null) {
+      const cleanText = paragraphMatch[1].replace(/<[^>]*>/g, '').trim();
+      if (cleanText.length > 20) {
+        paragraphs.push(cleanText);
+      }
+    }
+
+    // Extract links
+    const linkRegex = /<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/gi;
+    const links: Array<{
+      text: string;
+      href: string;
+      absolute_url: string;
+      is_external: boolean;
+    }> = [];
+    let linkMatch;
+    while ((linkMatch = linkRegex.exec(htmlContent)) !== null) {
+      const href = linkMatch[1].trim();
+      const text = linkMatch[2].trim();
+      
+      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        let absolute_url = href;
+        try {
+          if (!href.startsWith('http')) {
+            const baseUrl = new URL(originalUrl);
+            if (href.startsWith('/')) {
+              absolute_url = `${baseUrl.origin}${href}`;
+            } else {
+              absolute_url = new URL(href, originalUrl).href;
+            }
+          }
+        } catch {
+          absolute_url = href;
+        }
+        
+        links.push({
+          text: text || href,
+          href,
+          absolute_url,
+          is_external: !absolute_url.includes(new URL(originalUrl).hostname)
+        });
+      }
+    }
+
+    // Extract images
+    const imageRegex = /<img[^>]*src=["']([^"']*)["'][^>]*(?:alt=["']([^"']*)["'])?[^>]*>/gi;
+    const images: Array<{
+      src: string;
+      absolute_url: string;
+      alt: string;
+    }> = [];
+    let imageMatch;
+    while ((imageMatch = imageRegex.exec(htmlContent)) !== null) {
+      const src = imageMatch[1].trim();
+      const alt = imageMatch[2] ? imageMatch[2].trim() : '';
+      
+      if (src) {
+        let absolute_url = src;
+        try {
+          if (!src.startsWith('http')) {
+            const baseUrl = new URL(originalUrl);
+            if (src.startsWith('/')) {
+              absolute_url = `${baseUrl.origin}${src}`;
+            } else {
+              absolute_url = new URL(src, originalUrl).href;
+            }
+          }
+        } catch {
+          absolute_url = src;
+        }
+        
+        images.push({ src, absolute_url, alt });
+      }
+    }
+
+    // Extract forms (simplified)
+    const formRegex = /<form[^>]*(?:action=["']([^"']*)["'])?[^>]*>([\s\S]*?)<\/form>/gi;
+    const forms: Array<{
+      action: string;
+      method: string;
+      inputs: Array<{
+        type: string;
+        name: string;
+        placeholder: string;
+        required: boolean;
+      }>;
+    }> = [];
+    let formMatch;
+    while ((formMatch = formRegex.exec(htmlContent)) !== null) {
+      const action = formMatch[1] || originalUrl;
+      const formContent = formMatch[2];
+      
+      // Extract inputs from this form
+      const inputRegex = /<input[^>]*(?:type=["']([^"']*)["'])?[^>]*(?:name=["']([^"']*)["'])?[^>]*(?:placeholder=["']([^"']*)["'])?[^>]*(?:(required))?[^>]*>/gi;
+      const inputs: Array<{
+        type: string;
+        name: string;
+        placeholder: string;
+        required: boolean;
+      }> = [];
+      let inputMatch;
+      while ((inputMatch = inputRegex.exec(formContent)) !== null) {
+        inputs.push({
+          type: inputMatch[1] || 'text',
+          name: inputMatch[2] || '',
+          placeholder: inputMatch[3] || '',
+          required: !!inputMatch[4]
+        });
+      }
+      
+      forms.push({
+        action,
+        method: 'GET',
+        inputs
+      });
+    }
+
+    // Extract lists
+    const listRegex = /<(ul|ol)[^>]*>([\s\S]*?)<\/\1>/gi;
+    const lists: Array<{ type: string; items: string[] }> = [];
+    let listMatch;
+    while ((listMatch = listRegex.exec(htmlContent)) !== null) {
+      const type = listMatch[1].toLowerCase();
+      const listContent = listMatch[2];
+      
+      const itemRegex = /<li[^>]*>([^<]+(?:<[^>]*>[^<]*<\/[^>]*>[^<]*)*)<\/li>/gi;
+      const items: string[] = [];
+      let itemMatch;
+      while ((itemMatch = itemRegex.exec(listContent)) !== null) {
+        const cleanText = itemMatch[1].replace(/<[^>]*>/g, '').trim();
+        if (cleanText.length > 0) {
+          items.push(cleanText);
+        }
+      }
+      
+      if (items.length > 0) {
+        lists.push({ type, items });
+      }
+    }
+
+    // Extract tables (simplified)
+    const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+    const tables: Array<{
+      headers: string[];
+      rows: string[][];
+      total_rows: number;
+    }> = [];
+    let tableMatch;
+    while ((tableMatch = tableRegex.exec(htmlContent)) !== null) {
+      const tableContent = tableMatch[1];
+      
+      // Extract headers
+      const headerRegex = /<th[^>]*>([^<]+)<\/th>/gi;
+      const headers: string[] = [];
+      let headerMatch;
+      while ((headerMatch = headerRegex.exec(tableContent)) !== null) {
+        headers.push(headerMatch[1].trim());
+      }
+      
+      // Extract rows
+      const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      const rows: string[][] = [];
+      let rowMatch;
+      while ((rowMatch = rowRegex.exec(tableContent)) !== null) {
+        const rowContent = rowMatch[1];
+        const cellRegex = /<td[^>]*>([^<]+)<\/td>/gi;
+        const cells: string[] = [];
+        let cellMatch;
+        while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+          cells.push(cellMatch[1].trim());
+        }
+        if (cells.length > 0) {
+          rows.push(cells);
+        }
+      }
+      
+      if (headers.length > 0 || rows.length > 0) {
+        tables.push({
+          headers,
+          rows,
+          total_rows: rows.length
+        });
+      }
+    }
+
+    // Create full text by removing HTML tags
+    const cleanText = htmlContent
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const fullText = [
+      title,
+      ...headings.map(h => h.text),
+      cleanText
+    ].join(' ');
+
+    return {
+      status: 'success',
+      url: originalUrl,
+      final_url: originalUrl,
+      title,
+      content: {
+        text: {
+          full_text: fullText,
+          headings,
+          paragraphs,
+          lists
+        },
+        links,
+        forms,
+        images,
+        tables,
+        navigation: []
+      },
+      meta: {
+        'scraper': 'browserless.io',
+        'scraped_at': new Date().toISOString(),
+        'user_agent': 'Browserless Chrome',
+        'content_length': htmlContent.length.toString()
+      },
+      statistics: {
+        total_links: links.length,
+        total_forms: forms.length,
+        total_images: images.length,
+        total_tables: tables.length,
+        text_length: fullText.length
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ HTML transformation error:', error);
+    return {
+      status: 'error',
+      url: originalUrl,
+      error: `Failed to transform HTML content: ${error.message}`
+    };
+  }
 }
 
 serve(async (req) => {
@@ -389,9 +449,9 @@ serve(async (req) => {
     // Final validation
     if (result.status === 'success') {
       const contentLength = result.content?.text?.full_text?.length || 0;
-      if (contentLength < 50) {
-        result.status = 'error';
-        result.error = `Insufficient content extracted (${contentLength} characters). The page may have complex authentication or dynamic loading.`;
+      if (contentLength < 100) {
+        console.log('⚠️ Low content warning:', contentLength, 'characters');
+        result.meta = { ...result.meta, 'warning': 'Low content extracted' };
       }
     }
 
