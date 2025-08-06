@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/services/api";
 import { useAgent } from "@/contexts/AgentContext";
+import { samGovService } from "@/services/samGovService";
 
 const RFPInput = () => {
   const [rfpUrl, setRfpUrl] = useState("");
@@ -31,11 +32,24 @@ const RFPInput = () => {
 
     setIsLoading(true);
     setScrapingStage('connecting');
-    setScrapingStatus("Initializing advanced scraping system...");
+    
+    // Check if it's a SAM.gov URL for better status messaging
+    const isSAMGov = samGovService.isSAMGovUrl(rfpUrl);
+    
+    if (isSAMGov) {
+      setScrapingStatus("🏛️ SAM.gov detected: Attempting direct API access...");
+    } else {
+      setScrapingStatus("Initializing advanced scraping system...");
+    }
     
     try {
-      setScrapingStage('browserless');
-      setScrapingStatus("🚀 Browserless.io: Advanced browser automation with authentication bypass...");
+      if (isSAMGov) {
+        setScrapingStage('browserless');
+        setScrapingStatus("🏛️ SAM.gov API: Extracting opportunity data directly from government database...");
+      } else {
+        setScrapingStage('browserless');
+        setScrapingStatus("🚀 Browserless.io: Advanced browser automation with authentication bypass...");
+      }
       
       const result = await apiService.scrapeRFP(rfpUrl);
       
@@ -56,7 +70,12 @@ const RFPInput = () => {
 
       setScrapingStage('success');
       const scraperUsed = result.meta?.scraper || 'advanced-scraper';
-      setScrapingStatus(`Successfully extracted ${contentLength} characters using ${scraperUsed}!`);
+      
+      if (isSAMGov && scraperUsed === 'sam-gov-api') {
+        setScrapingStatus(`✅ Successfully extracted ${contentLength} characters from SAM.gov API! Starting Claude AI analysis...`);
+      } else {
+        setScrapingStatus(`Successfully extracted ${contentLength} characters using ${scraperUsed}!`);
+      }
 
       toast({
         title: "RFP Content Extracted",
@@ -78,6 +97,14 @@ const RFPInput = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const insertDemoUrl = (demoUrl: string) => {
+    setRfpUrl(demoUrl);
+    toast({
+      title: "Demo URL Inserted",
+      description: "Click 'Extract & Analyze' to test with this working example",
+    });
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,11 +154,17 @@ const RFPInput = () => {
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Submit Your RFP</h2>
         <p className="text-muted-foreground">
-          Browserless.io + Enhanced Scraping + Claude AI multi-agent analysis
+          SAM.gov API + Browserless.io + Enhanced Scraping + Claude AI multi-agent analysis
         </p>
-        <div className="flex items-center justify-center gap-2 mt-2">
-          <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"></div>
-          <span className="text-sm text-purple-600 font-medium">Browserless.io Browser Automation</span>
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></div>
+            <span className="text-sm text-blue-600 font-medium">SAM.gov API Integration</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"></div>
+            <span className="text-sm text-purple-600 font-medium">Browserless.io Browser Automation</span>
+          </div>
         </div>
       </div>
 
@@ -158,7 +191,7 @@ const RFPInput = () => {
                     <Input
                       id="rfp-url"
                       type="url"
-                      placeholder="https://example.com/rfp-document"
+                      placeholder="https://sam.gov/opp/[opportunity-id]/view"
                       value={rfpUrl}
                       onChange={(e) => setRfpUrl(e.target.value)}
                       className="pl-10"
@@ -184,15 +217,52 @@ const RFPInput = () => {
                   </div>
                 )}
               </div>
+
+              {/* Demo URLs Section */}
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-2">Try these working examples:</h4>
+                <div className="grid gap-2">
+                  {samGovService.getDemoUrls().map((demo, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-accent/50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{demo.title}</p>
+                        <p className="text-xs text-muted-foreground">{demo.description}</p>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => insertDemoUrl(demo.url)}
+                        disabled={isLoading}
+                      >
+                        Use This
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between p-2 bg-accent/50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">Any SAM.gov Opportunity</p>
+                      <p className="text-xs text-muted-foreground">Works with any sam.gov opportunity URL</p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => window.open('https://sam.gov/search/?index=opp&page=1', '_blank')}
+                    >
+                      Browse SAM.gov
+                    </Button>
+                  </div>
+                </div>
+              </div>
               
               <div className="text-sm text-muted-foreground">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Advanced 3-Tier Scraping System:</p>
-                    <p>• 🚀 <span className="text-purple-600 font-medium">Primary: Browserless.io</span> - Real Chrome browser automation, handles authentication barriers & JavaScript</p>
-                    <p>• 🔄 <span className="text-blue-600 font-medium">Fallback 1: Enhanced Scraper</span> - User agent rotation, retry logic, content extraction</p>
-                    <p>• 📝 <span className="text-yellow-600 font-medium">Fallback 2: Basic Scraper</span> - Simple HTTP requests for basic sites</p>
+                    <p className="font-medium">Advanced 4-Tier Extraction System:</p>
+                    <p>• 🏛️ <span className="text-blue-600 font-medium">Tier 0: SAM.gov API</span> - Direct access to government contract database (most reliable)</p>
+                    <p>• 🚀 <span className="text-purple-600 font-medium">Tier 1: Browserless.io</span> - Real Chrome browser automation, handles JavaScript & authentication</p>
+                    <p>• 🔄 <span className="text-blue-600 font-medium">Tier 2: Enhanced Scraper</span> - User agent rotation, retry logic, content extraction</p>
+                    <p>• 📝 <span className="text-yellow-600 font-medium">Tier 3: Basic Scraper</span> - Simple HTTP requests for basic sites</p>
                     <p>• 🤖 <span className="text-green-600 font-medium">Claude AI Multi-Agent</span> - 6 specialized agents analyze extracted content</p>
                   </div>
                 </div>

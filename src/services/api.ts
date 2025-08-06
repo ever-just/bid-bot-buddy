@@ -73,6 +73,8 @@ interface ScrapingAttempt {
   duration_ms: number;
 }
 
+import { samGovService } from './samGovService';
+
 class ApiService {
   private baseUrl = process.env.NODE_ENV === 'production' 
     ? 'https://your-python-backend.herokuapp.com'
@@ -84,6 +86,20 @@ class ApiService {
     try {
       // Create RFP analysis record in database
       const analysisId = await this.createRFPAnalysis(url);
+      
+      // Check if this is a SAM.gov URL and try API first
+      if (samGovService.isSAMGovUrl(url)) {
+        console.log('🏛️ Detected SAM.gov URL, attempting API extraction...');
+        const samResult = await this.scrapeWithSAMGovAPI(url);
+        
+        if (samResult.status === 'success') {
+          console.log('✅ SAM.gov API extraction successful!');
+          await this.updateRFPAnalysis(analysisId, samResult, 'success');
+          return samResult;
+        }
+        
+        console.log('⚠️ SAM.gov API failed, falling back to standard scraping...');
+      }
       
       // Tier 1: Modern BrowserQL scraper (primary)
       console.log('🚀 Attempting BrowserQL scraping (Tier 1)...');
@@ -361,6 +377,33 @@ class ApiService {
         status: 'error',
         url: url,
         error: error instanceof Error ? error.message : 'Basic scraper failed'
+      };
+    }
+  }
+
+  private async scrapeWithSAMGovAPI(url: string): Promise<ScrapeResult> {
+    try {
+      console.log('🏛️ Attempting SAM.gov API extraction...');
+      
+      const opportunityId = samGovService.extractOpportunityId(url);
+      if (!opportunityId) {
+        throw new Error('Could not extract opportunity ID from SAM.gov URL');
+      }
+      
+      const opportunity = await samGovService.fetchOpportunityById(opportunityId);
+      if (!opportunity) {
+        throw new Error('Opportunity not found in SAM.gov API');
+      }
+      
+      console.log('✅ SAM.gov API extraction successful');
+      return samGovService.convertToScrapeResult(opportunity, url);
+      
+    } catch (error) {
+      console.error('❌ SAM.gov API extraction error:', error);
+      return {
+        status: 'error',
+        url: url,
+        error: error instanceof Error ? error.message : 'SAM.gov API extraction failed'
       };
     }
   }
