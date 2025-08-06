@@ -61,220 +61,228 @@ interface ScrapeResult {
   error?: string;
 }
 
-async function scrapeWithBrowserless(url: string, apiKey: string): Promise<ScrapeResult> {
-  console.log('🚀 Starting modern BrowserQL scraping for:', url);
+async function scrapeWithBrowserQL(url: string, apiKey: string): Promise<ScrapeResult> {
+  console.log('🚀 Starting BrowserQL scraping for:', url);
   
   try {
-    // Use the modern BrowserQL endpoint
-    const browserlessUrl = `https://production-sfo.browserless.io/function`;
+    // Use the correct modern BrowserQL endpoint
+    const browserqlUrl = 'https://production-sfo.browserless.io/function';
     
-    // Modern BrowserQL query for content extraction
-    const browserqlQuery = `
-      export default async ({ page, context }) => {
-        console.log('🌐 Navigating to:', "${url}");
-        
-        // Navigate with enhanced options
-        await page.goto("${url}", { 
-          waitUntil: 'networkidle0',
-          timeout: 60000 
-        });
-        
-        // Wait for dynamic content to load
+    // Modern JavaScript function for comprehensive content extraction
+    const functionCode = `
+export default async ({ page, context }) => {
+  console.log('🌐 Navigating to URL:', "${url}");
+  
+  try {
+    // Navigate with comprehensive options
+    await page.goto("${url}", { 
+      waitUntil: 'networkidle2',
+      timeout: 45000 
+    });
+    
+    // Wait for initial content load
+    await page.waitForTimeout(2000);
+    
+    // Try to handle authentication barriers intelligently
+    try {
+      const authElements = await page.$$eval([
+        'button:has-text("Guest")',
+        'button:has-text("Continue")', 
+        'button:has-text("Skip")',
+        'a:has-text("Guest")',
+        'a:has-text("Continue")',
+        '.guest-access',
+        '.skip-login',
+        '[data-testid*="guest"]',
+        '[data-testid*="skip"]',
+        'button[title*="guest" i]',
+        'a[title*="guest" i]'
+      ].join(','), elements => elements.length);
+      
+      if (authElements > 0) {
+        console.log('🔓 Found potential guest access options, attempting click...');
+        await page.click('button:has-text("Guest"), a:has-text("Guest"), .guest-access');
         await page.waitForTimeout(3000);
+      }
+    } catch (e) {
+      console.log('ℹ️ No guest access elements found or clickable');
+    }
+    
+    // Extract comprehensive page data
+    const pageData = await page.evaluate(() => {
+      // Clean up scripts and styles for better text extraction
+      const scripts = document.querySelectorAll('script, style, noscript');
+      scripts.forEach(el => el.remove());
+      
+      const title = document.title || 'Untitled Page';
+      const finalUrl = window.location.href;
+      
+      // Extract headings with hierarchy
+      const headingElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      const headings = Array.from(headingElements).map(el => ({
+        level: parseInt(el.tagName.charAt(1)),
+        text: el.textContent?.trim() || ''
+      })).filter(h => h.text.length > 0);
+      
+      // Extract meaningful paragraphs
+      const paragraphElements = document.querySelectorAll('p, .content p, .text, .description');
+      const paragraphs = Array.from(paragraphElements)
+        .map(el => el.textContent?.trim() || '')
+        .filter(text => text.length > 15 && !text.match(/^(\\s|\\n)*$/));
+      
+      // Extract all links with context
+      const linkElements = document.querySelectorAll('a[href]');
+      const links = Array.from(linkElements).map(el => {
+        const href = el.getAttribute('href') || '';
+        const text = el.textContent?.trim() || '';
+        let absoluteUrl = href;
         
-        // Try to handle common authentication prompts
         try {
-          await page.evaluate(() => {
-            // Look for common "Continue as Guest" or "Skip Login" buttons
-            const guestButtons = document.querySelectorAll([
-              'button:contains("guest")',
-              'button:contains("skip")',
-              'button:contains("continue")',
-              'a:contains("guest")',
-              'a:contains("continue")',
-              '.guest-access',
-              '.skip-login',
-              '[data-testid*="guest"]',
-              '[data-testid*="skip"]'
-            ].join(','));
-            
-            if (guestButtons.length > 0) {
-              guestButtons[0].click();
-              console.log('🔓 Clicked guest access button');
-            }
-          });
-          
-          // Wait after clicking
-          await page.waitForTimeout(2000);
-        } catch (e) {
-          console.log('ℹ️ No guest access buttons found or clickable');
+          if (!href.startsWith('http') && !href.startsWith('mailto:')) {
+            absoluteUrl = href.startsWith('/') 
+              ? window.location.origin + href
+              : new URL(href, window.location.href).href;
+          }
+        } catch {
+          absoluteUrl = href;
         }
         
-        // Extract comprehensive content
-        const result = await page.evaluate(() => {
-          const title = document.title || 'Untitled';
-          
-          // Extract headings
-          const headingElements = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-          const headings = Array.from(headingElements).map(el => ({
-            level: parseInt(el.tagName.charAt(1)),
-            text: el.textContent?.trim() || ''
-          }));
-          
-          // Extract paragraphs
-          const paragraphElements = document.querySelectorAll('p');
-          const paragraphs = Array.from(paragraphElements)
-            .map(el => el.textContent?.trim() || '')
-            .filter(text => text.length > 20);
-          
-          // Extract links
-          const linkElements = document.querySelectorAll('a[href]');
-          const links = Array.from(linkElements).map(el => {
-            const href = el.getAttribute('href') || '';
-            const text = el.textContent?.trim() || '';
-            let absolute_url = href;
-            
-            try {
-              if (!href.startsWith('http')) {
-                absolute_url = href.startsWith('/') 
-                  ? \`\${window.location.origin}\${href}\`
-                  : new URL(href, window.location.href).href;
-              }
-            } catch {
-              absolute_url = href;
-            }
-            
-            return {
-              text: text || href,
-              href,
-              absolute_url,
-              is_external: !absolute_url.includes(window.location.hostname)
-            };
-          }).filter(link => link.href && !link.href.startsWith('#'));
-          
-          // Extract forms
-          const formElements = document.querySelectorAll('form');
-          const forms = Array.from(formElements).map(form => {
-            const action = form.getAttribute('action') || window.location.href;
-            const method = form.getAttribute('method') || 'GET';
-            
-            const inputElements = form.querySelectorAll('input, textarea, select');
-            const inputs = Array.from(inputElements).map(input => ({
-              type: input.getAttribute('type') || 'text',
-              name: input.getAttribute('name') || '',
-              placeholder: input.getAttribute('placeholder') || '',
-              required: input.hasAttribute('required')
-            }));
-            
-            return { action, method: method.toUpperCase(), inputs };
-          });
-          
-          // Extract images
-          const imageElements = document.querySelectorAll('img[src]');
-          const images = Array.from(imageElements).map(img => {
-            const src = img.getAttribute('src') || '';
-            const alt = img.getAttribute('alt') || '';
-            let absolute_url = src;
-            
-            try {
-              if (!src.startsWith('http')) {
-                absolute_url = src.startsWith('/') 
-                  ? \`\${window.location.origin}\${src}\`
-                  : new URL(src, window.location.href).href;
-              }
-            } catch {
-              absolute_url = src;
-            }
-            
-            return { src, absolute_url, alt };
-          });
-          
-          // Extract tables
-          const tableElements = document.querySelectorAll('table');
-          const tables = Array.from(tableElements).map(table => {
-            const headerElements = table.querySelectorAll('th');
-            const headers = Array.from(headerElements).map(th => th.textContent?.trim() || '');
-            
-            const rowElements = table.querySelectorAll('tbody tr, tr');
-            const rows = Array.from(rowElements).map(tr => {
-              const cellElements = tr.querySelectorAll('td');
-              return Array.from(cellElements).map(td => td.textContent?.trim() || '');
-            }).filter(row => row.length > 0);
-            
-            return {
-              headers,
-              rows,
-              total_rows: rows.length
-            };
-          });
-          
-          // Extract lists
-          const listElements = document.querySelectorAll('ul, ol');
-          const lists = Array.from(listElements).map(list => {
-            const type = list.tagName.toLowerCase();
-            const itemElements = list.querySelectorAll('li');
-            const items = Array.from(itemElements).map(li => li.textContent?.trim() || '');
-            return { type, items: items.filter(item => item.length > 0) };
-          });
-          
-          // Get full text content
-          const scripts = document.querySelectorAll('script, style, noscript');
-          scripts.forEach(el => el.remove());
-          const fullText = document.body?.textContent?.replace(/\\s+/g, ' ').trim() || '';
-          
-          return {
-            title,
-            fullText,
-            headings,
-            paragraphs,
-            links,
-            forms,
-            images,
-            tables,
-            lists,
-            finalUrl: window.location.href
-          };
-        });
+        return {
+          text: text || href,
+          href,
+          absolute_url: absoluteUrl,
+          is_external: !absoluteUrl.includes(window.location.hostname)
+        };
+      }).filter(link => 
+        link.href && 
+        !link.href.startsWith('#') && 
+        !link.href.startsWith('javascript:') &&
+        link.text.length > 0
+      );
+      
+      // Extract forms with all input details
+      const formElements = document.querySelectorAll('form');
+      const forms = Array.from(formElements).map(form => {
+        const action = form.getAttribute('action') || window.location.href;
+        const method = (form.getAttribute('method') || 'GET').toUpperCase();
         
-        return result;
+        const inputElements = form.querySelectorAll('input, textarea, select');
+        const inputs = Array.from(inputElements).map(input => ({
+          type: input.getAttribute('type') || 'text',
+          name: input.getAttribute('name') || '',
+          placeholder: input.getAttribute('placeholder') || '',
+          required: input.hasAttribute('required')
+        }));
+        
+        return { action, method, inputs };
+      });
+      
+      // Extract images with metadata
+      const imageElements = document.querySelectorAll('img[src]');
+      const images = Array.from(imageElements).map(img => {
+        const src = img.getAttribute('src') || '';
+        const alt = img.getAttribute('alt') || '';
+        let absoluteUrl = src;
+        
+        try {
+          if (!src.startsWith('http')) {
+            absoluteUrl = src.startsWith('/') 
+              ? window.location.origin + src
+              : new URL(src, window.location.href).href;
+          }
+        } catch {
+          absoluteUrl = src;
+        }
+        
+        return { src, absolute_url: absoluteUrl, alt };
+      }).filter(img => img.src && !img.src.startsWith('data:'));
+      
+      // Extract table data
+      const tableElements = document.querySelectorAll('table');
+      const tables = Array.from(tableElements).map(table => {
+        const headerElements = table.querySelectorAll('th');
+        const headers = Array.from(headerElements).map(th => th.textContent?.trim() || '');
+        
+        const rowElements = table.querySelectorAll('tbody tr, tr:not(:first-child)');
+        const rows = Array.from(rowElements).map(tr => {
+          const cellElements = tr.querySelectorAll('td, th');
+          return Array.from(cellElements).map(cell => cell.textContent?.trim() || '');
+        }).filter(row => row.length > 0 && row.some(cell => cell.length > 0));
+        
+        return {
+          headers,
+          rows,
+          total_rows: rows.length
+        };
+      }).filter(table => table.rows.length > 0);
+      
+      // Extract lists
+      const listElements = document.querySelectorAll('ul, ol');
+      const lists = Array.from(listElements).map(list => {
+        const type = list.tagName.toLowerCase();
+        const itemElements = list.querySelectorAll('li');
+        const items = Array.from(itemElements)
+          .map(li => li.textContent?.trim() || '')
+          .filter(item => item.length > 0);
+        return { type, items };
+      }).filter(list => list.items.length > 0);
+      
+      // Get clean full text
+      const fullText = document.body?.textContent?.replace(/\\s+/g, ' ').trim() || '';
+      
+      return {
+        title,
+        finalUrl,
+        fullText,
+        headings,
+        paragraphs,
+        links,
+        forms,
+        images,
+        tables,
+        lists
       };
-    `;
-
-    console.log('📡 Making request to modern BrowserQL endpoint...');
-    console.log('🔗 Endpoint URL:', browserlessUrl);
+    });
     
-    const response = await fetch(browserlessUrl, {
+    return pageData;
+    
+  } catch (error) {
+    console.error('Browser execution error:', error);
+    throw new Error(\`Browser execution failed: \${error.message}\`);
+  }
+};`;
+
+    console.log('📡 Making BrowserQL API request...');
+    
+    const response = await fetch(browserqlUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/javascript',
         'Authorization': `Bearer ${apiKey}`,
         'Cache-Control': 'no-cache'
       },
-      body: browserqlQuery
+      body: functionCode
     });
 
     console.log('📡 Response status:', response.status);
-    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ BrowserQL API error response:', errorText);
+      console.error('❌ BrowserQL API error:', errorText);
       
       // Enhanced error handling with specific messages
       if (response.status === 401) {
-        throw new Error('BrowserQL API key is invalid or expired');
+        throw new Error('BrowserQL authentication failed - check API key');
       } else if (response.status === 402) {
-        throw new Error('BrowserQL account has exceeded usage limits');
+        throw new Error('BrowserQL quota exceeded - upgrade plan needed');
       } else if (response.status === 403) {
-        throw new Error('Access forbidden. Check API key permissions');
-      } else if (response.status === 404) {
-        throw new Error('BrowserQL endpoint not found. API may have changed');
+        throw new Error('BrowserQL access forbidden - check API permissions');
       } else if (response.status === 429) {
-        throw new Error('BrowserQL rate limit exceeded. Please try again later');
+        throw new Error('BrowserQL rate limit exceeded - try again later');
       } else if (response.status === 500) {
-        throw new Error('BrowserQL service is temporarily unavailable');
+        throw new Error('BrowserQL service temporarily unavailable');
       } else {
-        throw new Error(`BrowserQL API error: ${response.status} - ${errorText}`);
+        throw new Error(`BrowserQL API error: ${response.status} - ${errorText.substring(0, 200)}`);
       }
     }
 
@@ -286,7 +294,7 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
       formsCount: extractedData.forms?.length || 0
     });
 
-    // Transform to our standard format
+    // Transform to standard format
     const result: ScrapeResult = {
       status: 'success',
       url: url,
@@ -321,13 +329,17 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
       }
     };
 
-    // Validate content quality
-    if (!result.content?.text?.full_text || result.content.text.full_text.length < 100) {
-      console.log('⚠️ Low content warning:', result.content?.text?.full_text?.length || 0, 'characters');
+    // Quality assessment
+    const contentQuality = result.statistics!.text_length;
+    if (contentQuality < 100) {
+      console.log('⚠️ Low content quality detected:', contentQuality, 'characters');
       result.meta = { 
         ...result.meta, 
-        'warning': 'Low content extracted - site may require authentication or have access restrictions' 
+        'warning': 'Minimal content extracted - possible authentication barrier or dynamic loading' 
       };
+    } else if (contentQuality > 1000) {
+      console.log('✅ High quality content extracted:', contentQuality, 'characters');
+      result.meta = { ...result.meta, 'quality': 'high' };
     }
 
     return result;
@@ -337,7 +349,7 @@ async function scrapeWithBrowserless(url: string, apiKey: string): Promise<Scrap
     return {
       status: 'error',
       url,
-      error: `BrowserQL scraping failed: ${error.message}`
+      error: `BrowserQL failed: ${error.message}`
     };
   }
 }
@@ -352,7 +364,7 @@ serve(async (req) => {
 
     if (!url) {
       return new Response(
-        JSON.stringify({ status: 'error', error: 'URL is required' }),
+        JSON.stringify({ status: 'error', error: 'URL parameter required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -362,21 +374,24 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           status: 'error', 
-          error: 'BrowserQL API key not configured' 
+          error: 'BROWSERLESS_API_KEY environment variable not configured' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('🎯 BrowserQL scraping initiated for:', url);
+    console.log('🎯 Modern BrowserQL scraping initiated for:', url);
     console.log('🔑 API key configured:', apiKey ? 'Yes' : 'No');
     
-    const result = await scrapeWithBrowserless(url, apiKey);
+    const startTime = Date.now();
+    const result = await scrapeWithBrowserQL(url, apiKey);
+    const duration = Date.now() - startTime;
 
     // Enhanced result validation and logging
     if (result.status === 'success') {
       const contentLength = result.content?.text?.full_text?.length || 0;
-      console.log('📊 Content analysis:', {
+      console.log('📊 Scraping performance metrics:', {
+        duration: `${duration}ms`,
         contentLength,
         hasTitle: !!result.title,
         linksFound: result.content?.links?.length || 0,
@@ -384,6 +399,8 @@ serve(async (req) => {
         headingsFound: result.content?.text?.headings?.length || 0,
         quality: contentLength > 1000 ? 'HIGH' : contentLength > 200 ? 'MEDIUM' : 'LOW'
       });
+    } else {
+      console.log('❌ Scraping failed after', `${duration}ms:`, result.error);
     }
 
     return new Response(
@@ -396,7 +413,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         status: 'error',
-        error: `BrowserQL scraping system error: ${error.message}`
+        error: `System error: ${error.message}`
       }),
       { 
         status: 500,
