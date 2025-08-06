@@ -63,83 +63,168 @@ interface RFPAnalysis {
   compliance_requirements: string[];
 }
 
+interface ScrapingAttempt {
+  timestamp: string;
+  url: string;
+  scraper_type: 'browserql' | 'enhanced' | 'basic';
+  success: boolean;
+  content_length: number;
+  error?: string;
+  duration_ms: number;
+}
+
 class ApiService {
   private baseUrl = process.env.NODE_ENV === 'production' 
-    ? 'https://your-python-backend.herokuapp.com' // Update with actual production URL
+    ? 'https://your-python-backend.herokuapp.com'
     : 'http://localhost:8080';
 
+  private scrapingAttempts: ScrapingAttempt[] = [];
+
   async scrapeRFP(url: string): Promise<ScrapeResult> {
+    console.log('🕷️ Starting intelligent scraping system for:', url);
+    
     try {
-      console.log('🕷️ Starting advanced scraping system for:', url);
+      // Tier 1: Modern BrowserQL scraper (primary)
+      console.log('🚀 Attempting BrowserQL scraping (Tier 1)...');
+      const startTime = Date.now();
+      const browserqlResult = await this.scrapeWithBrowserQL(url);
       
-      // Primary: Browserless.io for complex sites and authentication barriers
-      console.log('🚀 Attempting Browserless.io scraping (primary)...');
-      const browserlessResult = await this.scrapeWithBrowserless(url);
+      this.logScrapingAttempt({
+        timestamp: new Date().toISOString(),
+        url,
+        scraper_type: 'browserql',
+        success: browserqlResult.status === 'success',
+        content_length: browserqlResult.content?.text?.full_text?.length || 0,
+        error: browserqlResult.error,
+        duration_ms: Date.now() - startTime
+      });
       
-      if (browserlessResult.status === 'success' && 
-          (browserlessResult.content?.text?.full_text?.length || 0) > 200) {
-        console.log('✅ Browserless.io scraping successful!');
-        return browserlessResult;
+      if (browserqlResult.status === 'success' && this.isQualityContent(browserqlResult)) {
+        console.log('✅ BrowserQL scraping successful with quality content!');
+        return browserqlResult;
       }
 
-      console.log('⚠️ Browserless.io insufficient, trying enhanced scraper fallback...');
+      console.log('⚠️ BrowserQL insufficient quality, trying enhanced scraper (Tier 2)...');
       
-      // Fallback 1: Enhanced Supabase edge function
+      // Tier 2: Enhanced scraper fallback
+      const enhancedStartTime = Date.now();
       const enhancedResult = await this.scrapeWithEnhanced(url);
       
-      if (enhancedResult.status === 'success' && 
-          (enhancedResult.content?.text?.full_text?.length || 0) > 200) {
-        console.log('✅ Enhanced scraper fallback successful!');
+      this.logScrapingAttempt({
+        timestamp: new Date().toISOString(),
+        url,
+        scraper_type: 'enhanced',
+        success: enhancedResult.status === 'success',
+        content_length: enhancedResult.content?.text?.full_text?.length || 0,
+        error: enhancedResult.error,
+        duration_ms: Date.now() - enhancedStartTime
+      });
+      
+      if (enhancedResult.status === 'success' && this.isQualityContent(enhancedResult)) {
+        console.log('✅ Enhanced scraper successful with quality content!');
         return enhancedResult;
       }
 
-      console.log('⚠️ Enhanced scraper insufficient, trying basic scraper fallback...');
+      console.log('⚠️ Enhanced scraper insufficient, trying basic scraper (Tier 3)...');
       
-      // Fallback 2: Basic scraper
+      // Tier 3: Basic scraper last resort
+      const basicStartTime = Date.now();
       const basicResult = await this.scrapeWithBasic(url);
       
+      this.logScrapingAttempt({
+        timestamp: new Date().toISOString(),
+        url,
+        scraper_type: 'basic',
+        success: basicResult.status === 'success',
+        content_length: basicResult.content?.text?.full_text?.length || 0,
+        error: basicResult.error,
+        duration_ms: Date.now() - basicStartTime
+      });
+      
       if (basicResult.status === 'success') {
-        console.log('✅ Basic scraper fallback completed');
+        console.log('✅ Basic scraper completed (minimal content)');
         return basicResult;
       }
 
-      // All methods failed
+      // All tiers failed
+      console.log('❌ All scraping tiers failed');
       return {
         status: 'error',
         url: url,
-        error: 'All scraping methods failed. The page may have severe access restrictions or require manual authentication.'
+        error: 'All scraping methods failed. The page may have severe access restrictions or require manual authentication.',
+        meta: {
+          'attempts': '3',
+          'scrapers_tried': 'browserql,enhanced,basic',
+          'failure_reason': 'complete_failure'
+        }
       };
       
     } catch (error) {
-      console.error('❌ Error in advanced scraping system:', error);
+      console.error('❌ Error in intelligent scraping system:', error);
       
       return {
         status: 'error',
         url: url,
-        error: error instanceof Error ? error.message : 'Advanced scraping system failed'
+        error: error instanceof Error ? error.message : 'Intelligent scraping system failed'
       };
     }
   }
 
-  private async scrapeWithBrowserless(url: string): Promise<ScrapeResult> {
+  private isQualityContent(result: ScrapeResult): boolean {
+    const contentLength = result.content?.text?.full_text?.length || 0;
+    const hasHeadings = (result.content?.text?.headings?.length || 0) > 0;
+    const hasLinks = (result.content?.links?.length || 0) > 0;
+    
+    // Quality thresholds
+    const isHighQuality = contentLength > 1000 && hasHeadings;
+    const isMediumQuality = contentLength > 200 && (hasHeadings || hasLinks);
+    
+    console.log('📊 Content quality assessment:', {
+      contentLength,
+      hasHeadings,
+      hasLinks,
+      quality: isHighQuality ? 'HIGH' : isMediumQuality ? 'MEDIUM' : 'LOW'
+    });
+    
+    return isHighQuality || isMediumQuality;
+  }
+
+  private logScrapingAttempt(attempt: ScrapingAttempt): void {
+    this.scrapingAttempts.push(attempt);
+    console.log('📝 Scraping attempt logged:', {
+      scraper: attempt.scraper_type,
+      success: attempt.success,
+      contentLength: attempt.content_length,
+      duration: `${attempt.duration_ms}ms`
+    });
+    
+    // Keep only last 10 attempts in memory
+    if (this.scrapingAttempts.length > 10) {
+      this.scrapingAttempts = this.scrapingAttempts.slice(-10);
+    }
+  }
+
+  private async scrapeWithBrowserQL(url: string): Promise<ScrapeResult> {
     try {
       const { supabase } = await import('@/integrations/supabase/client');
       
+      console.log('🔧 Invoking BrowserQL scraper...');
       const { data, error } = await supabase.functions.invoke('browserless-scraper', {
         body: { url }
       });
 
       if (error) {
-        throw new Error(error.message || 'Browserless scraper failed');
+        throw new Error(error.message || 'BrowserQL scraper failed');
       }
 
+      console.log('✅ BrowserQL scraper response received');
       return data;
     } catch (error) {
-      console.error('❌ Browserless scraper error:', error);
+      console.error('❌ BrowserQL scraper error:', error);
       return {
         status: 'error',
         url: url,
-        error: error instanceof Error ? error.message : 'Browserless scraper failed'
+        error: error instanceof Error ? error.message : 'BrowserQL scraper failed'
       };
     }
   }
@@ -190,6 +275,38 @@ class ApiService {
     }
   }
 
+  // Get scraping performance metrics
+  getScrapingMetrics(): {
+    totalAttempts: number;
+    successRate: number;
+    averageDuration: number;
+    scraperPerformance: Record<string, { attempts: number; successRate: number }>;
+  } {
+    const totalAttempts = this.scrapingAttempts.length;
+    const successfulAttempts = this.scrapingAttempts.filter(a => a.success).length;
+    const successRate = totalAttempts > 0 ? (successfulAttempts / totalAttempts) * 100 : 0;
+    const averageDuration = totalAttempts > 0 
+      ? this.scrapingAttempts.reduce((sum, a) => sum + a.duration_ms, 0) / totalAttempts 
+      : 0;
+
+    const scraperPerformance: Record<string, { attempts: number; successRate: number }> = {};
+    ['browserql', 'enhanced', 'basic'].forEach(scraper => {
+      const attempts = this.scrapingAttempts.filter(a => a.scraper_type === scraper);
+      const successful = attempts.filter(a => a.success);
+      scraperPerformance[scraper] = {
+        attempts: attempts.length,
+        successRate: attempts.length > 0 ? (successful.length / attempts.length) * 100 : 0
+      };
+    });
+
+    return {
+      totalAttempts,
+      successRate,
+      averageDuration,
+      scraperPerformance
+    };
+  }
+
   async checkHealth(): Promise<{ status: string; timestamp: string; version: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/health`);
@@ -207,25 +324,12 @@ class ApiService {
     const text = scrapedContent.content?.text?.full_text || '';
     const headings = scrapedContent.content?.text?.headings || [];
     
-    // Extract requirements from headings and text
     const requirements = this.extractRequirements(text, headings);
-    
-    // Extract deadlines
     const deadlines = this.extractDeadlines(text);
-    
-    // Extract budget information
     const budget = this.extractBudget(text);
-    
-    // Extract scope
     const scope = this.extractScope(text, headings);
-    
-    // Extract contact information
     const contact_info = this.extractContactInfo(text);
-    
-    // Extract submission details
     const submission_details = this.extractSubmissionDetails(text);
-    
-    // Extract compliance requirements
     const compliance_requirements = this.extractComplianceRequirements(text, headings);
 
     return {
@@ -242,7 +346,6 @@ class ApiService {
   private extractRequirements(text: string, headings: Array<{ level: number; text: string }>): string[] {
     const requirements: string[] = [];
     
-    // Look for requirement keywords in headings
     const requirementKeywords = ['requirement', 'specification', 'scope', 'deliverable', 'objective'];
     headings.forEach(heading => {
       if (requirementKeywords.some(keyword => heading.text.toLowerCase().includes(keyword))) {
@@ -250,7 +353,6 @@ class ApiService {
       }
     });
     
-    // Extract bullet points and numbered lists that look like requirements
     const bulletRegex = /(?:^|\n)(?:\d+\.|\*|\-|\•)\s*([^\n]+)/gi;
     let match;
     while ((match = bulletRegex.exec(text)) !== null) {
@@ -260,13 +362,12 @@ class ApiService {
       }
     }
     
-    return requirements.slice(0, 20); // Limit to 20 requirements
+    return requirements.slice(0, 20);
   }
 
   private extractDeadlines(text: string): Array<{ date: string; description: string }> {
     const deadlines: Array<{ date: string; description: string }> = [];
     
-    // Look for date patterns
     const dateRegex = /(\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})/gi;
     const sentences = text.split(/[.!?]+/);
     
@@ -280,7 +381,7 @@ class ApiService {
       }
     });
     
-    return deadlines.slice(0, 5); // Limit to 5 deadlines
+    return deadlines.slice(0, 5);
   }
 
   private extractBudget(text: string): string {
@@ -294,7 +395,6 @@ class ApiService {
     
     for (const heading of headings) {
       if (scopeKeywords.some(keyword => heading.text.toLowerCase().includes(keyword))) {
-        // Find the text following this heading
         const headingIndex = text.indexOf(heading.text);
         if (headingIndex !== -1) {
           const followingText = text.substring(headingIndex + heading.text.length, headingIndex + 500);
@@ -309,11 +409,9 @@ class ApiService {
   private extractContactInfo(text: string): Record<string, string> {
     const contact: Record<string, string> = {};
     
-    // Email
     const emailMatch = text.match(/[\w\.-]+@[\w\.-]+\.\w+/);
     if (emailMatch) contact.email = emailMatch[0];
     
-    // Phone
     const phoneMatch = text.match(/(?:\+1[-.\s]?)?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})/);
     if (phoneMatch) contact.phone = phoneMatch[0];
     
