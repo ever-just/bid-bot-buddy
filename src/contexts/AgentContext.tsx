@@ -11,6 +11,7 @@ interface AgentState {
   agents: AgentProgress[];
   isProcessing: boolean;
   error: string | null;
+  processingStartTime: number | null;
 }
 
 interface AgentProgress {
@@ -36,7 +37,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 1,
     name: "Requirements Analyst",
-    description: "Extracting requirements and specifications using Claude AI",
+    description: "Extracting technical and functional requirements using Claude AI",
     status: "pending",
     progress: 0,
     icon: "FileSearch",
@@ -45,7 +46,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 2,
     name: "Market Researcher",
-    description: "Analyzing competitive landscape using Claude AI",
+    description: "Analyzing competitive landscape and market conditions using Claude AI",
     status: "pending",
     progress: 0,
     icon: "TrendingUp",
@@ -54,7 +55,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 3,
     name: "Vendor Scout",
-    description: "Identifying potential partners using Claude AI",
+    description: "Identifying potential subcontractors and partners using Claude AI",
     status: "pending",
     progress: 0,
     icon: "Users",
@@ -63,7 +64,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 4,
     name: "Cost Estimator",
-    description: "Calculating optimal pricing using Claude AI",
+    description: "Calculating pricing strategies and cost estimates using Claude AI",
     status: "pending",
     progress: 0,
     icon: "DollarSign",
@@ -72,7 +73,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 5,
     name: "Compliance Checker",
-    description: "Ensuring regulatory compliance using Claude AI",
+    description: "Verifying regulatory and compliance requirements using Claude AI",
     status: "pending",
     progress: 0,
     icon: "Bot",
@@ -81,7 +82,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 6,
     name: "Proposal Generator",
-    description: "Creating final proposal using Claude AI",
+    description: "Creating comprehensive proposal content using Claude AI",
     status: "pending",
     progress: 0,
     icon: "Clock",
@@ -97,24 +98,36 @@ const initialState: AgentState = {
   agents: initialAgents,
   isProcessing: false,
   error: null,
+  processingStartTime: null,
 };
 
 export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AgentState>(initialState);
 
   const startAnalysis = async (rfpData: ScrapeResult) => {
+    const startTime = Date.now();
+    console.log('🎯 Starting RFP analysis at:', new Date(startTime).toISOString());
+
     setState(prev => ({
       ...prev,
       currentStep: 'processing',
       rfpData,
       isProcessing: true,
       error: null,
-      agents: prev.agents.map(agent => ({ ...agent, status: 'pending', progress: 0, result: null }))
+      processingStartTime: startTime,
+      agents: prev.agents.map(agent => ({ 
+        ...agent, 
+        status: 'pending', 
+        progress: 0, 
+        result: null 
+      }))
     }));
 
+    let progressIntervals: NodeJS.Timeout[] = [];
+
     try {
-      // Start progress simulation
-      const progressIntervals = anthropicAgentService.simulateProgressUpdates(
+      // Start visual progress simulation for better UX
+      progressIntervals = anthropicAgentService.simulateProgressUpdates(
         (agentId, progress, status, result) => {
           updateAgentProgress(agentId, progress, status);
           if (result && status === 'completed') {
@@ -131,27 +144,57 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       );
 
       // Run actual Anthropic analysis
+      console.log('🔄 Calling real Anthropic API...');
       const results = await anthropicAgentService.analyzeRFPWithAgents(rfpData);
       
-      // Clear progress intervals
-      progressIntervals.forEach(interval => clearInterval(interval));
+      // Clear progress simulation intervals
+      anthropicAgentService.clearProgressIntervals(progressIntervals);
       
-      // Update with real results
+      const endTime = Date.now();
+      const duration = (endTime - startTime) / 1000;
+      console.log(`⏱️ Analysis completed in ${duration.toFixed(1)} seconds`);
+      
+      // Update with real results from Claude
       setState(prev => ({
         ...prev,
         anthropicResults: results,
         currentStep: 'completed',
         isProcessing: false,
-        agents: prev.agents.map((agent, index) => ({
-          ...agent,
-          status: 'completed' as const,
-          progress: 100,
-          result: Object.values(results.results)[index]?.substring(0, 150) + '...' || 'Analysis completed'
-        }))
+        agents: prev.agents.map((agent, index) => {
+          const agentNames = [
+            "Requirements Analyst",
+            "Market Researcher", 
+            "Vendor Scout",
+            "Cost Estimator",
+            "Compliance Checker",
+            "Proposal Generator"
+          ];
+          const agentName = agentNames[index];
+          const agentResult = results.results[agentName];
+          
+          return {
+            ...agent,
+            status: 'completed' as const,
+            progress: 100,
+            result: agentResult ? 
+              (agentResult.length > 200 ? agentResult.substring(0, 200) + '...' : agentResult) : 
+              'Analysis completed'
+          };
+        })
       }));
 
+      console.log('🎉 RFP analysis completed successfully!');
+
     } catch (error) {
-      console.error('Analysis failed:', error);
+      console.error('💥 Analysis failed:', error);
+      
+      // Clear any running intervals
+      anthropicAgentService.clearProgressIntervals(progressIntervals);
+      
+      const endTime = Date.now();
+      const duration = (endTime - startTime) / 1000;
+      console.log(`❌ Analysis failed after ${duration.toFixed(1)} seconds`);
+      
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Analysis failed',
@@ -160,7 +203,7 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         agents: prev.agents.map(agent => ({
           ...agent,
           status: 'error' as const,
-          result: 'Analysis failed'
+          result: 'Analysis failed - please try again'
         }))
       }));
     }
@@ -178,7 +221,11 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const resetState = () => {
-    setState(initialState);
+    console.log('🔄 Resetting agent state');
+    setState({
+      ...initialState,
+      agents: initialAgents.map(agent => ({ ...agent })) // Deep copy
+    });
   };
 
   return (
