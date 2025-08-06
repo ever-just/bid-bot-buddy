@@ -37,7 +37,7 @@ const RFPInput = () => {
 
       toast({
         title: "RFP Scraped Successfully",
-        description: `Found ${result.statistics?.text_length || 0} characters of content`,
+        description: `Starting Claude AI multi-agent analysis of ${result.statistics?.text_length || 0} characters`,
       });
 
       startAnalysis(result);
@@ -79,8 +79,12 @@ const RFPInput = () => {
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">Submit Your RFP</h2>
         <p className="text-muted-foreground">
-          Upload a document or provide a URL to start the automated analysis
+          Upload a document or provide a URL to start the Claude AI multi-agent analysis
         </p>
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+          <span className="text-sm text-primary font-medium">Powered by Claude AI</span>
+        </div>
       </div>
 
       <Tabs defaultValue="url" className="w-full max-w-2xl mx-auto">
@@ -116,10 +120,10 @@ const RFPInput = () => {
                     {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
+                        Analyzing with AI...
                       </>
                     ) : (
-                      "Analyze RFP"
+                      "Start AI Analysis"
                     )}
                   </Button>
                 </div>
@@ -127,6 +131,7 @@ const RFPInput = () => {
               
               <div className="text-sm text-muted-foreground">
                 <p>Supported formats: PDF, DOC, DOCX, HTML pages</p>
+                <p className="font-medium">✨ Uses 6 specialized Claude AI agents for comprehensive analysis</p>
               </div>
             </div>
           </Card>

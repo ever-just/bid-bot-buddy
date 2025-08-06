@@ -1,1 +1,5 @@
+
 project_id = "dywlonihwrnutwvzqivo"
+
+[functions.rfp-multi-agent]
+verify_jwt = false

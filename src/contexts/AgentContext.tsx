@@ -1,10 +1,13 @@
+
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { ScrapeResult, RFPAnalysis } from '@/services/api';
+import { anthropicAgentService, AnthropicAgentResult } from '@/services/anthropicAgentService';
 
 interface AgentState {
   currentStep: 'input' | 'processing' | 'completed';
   rfpData: ScrapeResult | null;
   analysis: RFPAnalysis | null;
+  anthropicResults: AnthropicAgentResult | null;
   agents: AgentProgress[];
   isProcessing: boolean;
   error: string | null;
@@ -32,8 +35,8 @@ const AgentContext = createContext<AgentContextType | undefined>(undefined);
 const initialAgents: AgentProgress[] = [
   {
     id: 1,
-    name: "RFP Analyzer",
-    description: "Extracting requirements and deadlines",
+    name: "Requirements Analyst",
+    description: "Extracting requirements and specifications using Claude AI",
     status: "pending",
     progress: 0,
     icon: "FileSearch",
@@ -42,7 +45,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 2,
     name: "Market Researcher",
-    description: "Analyzing market conditions and pricing",
+    description: "Analyzing competitive landscape using Claude AI",
     status: "pending",
     progress: 0,
     icon: "TrendingUp",
@@ -51,7 +54,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 3,
     name: "Vendor Scout",
-    description: "Finding qualified subcontractors",
+    description: "Identifying potential partners using Claude AI",
     status: "pending",
     progress: 0,
     icon: "Users",
@@ -60,7 +63,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 4,
     name: "Cost Estimator",
-    description: "Calculating optimal pricing strategy",
+    description: "Calculating optimal pricing using Claude AI",
     status: "pending",
     progress: 0,
     icon: "DollarSign",
@@ -69,7 +72,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 5,
     name: "Compliance Checker",
-    description: "Ensuring regulatory compliance",
+    description: "Ensuring regulatory compliance using Claude AI",
     status: "pending",
     progress: 0,
     icon: "Bot",
@@ -78,7 +81,7 @@ const initialAgents: AgentProgress[] = [
   {
     id: 6,
     name: "Proposal Generator",
-    description: "Creating final proposal document",
+    description: "Creating final proposal using Claude AI",
     status: "pending",
     progress: 0,
     icon: "Clock",
@@ -90,6 +93,7 @@ const initialState: AgentState = {
   currentStep: 'input',
   rfpData: null,
   analysis: null,
+  anthropicResults: null,
   agents: initialAgents,
   isProcessing: false,
   error: null,
@@ -98,7 +102,7 @@ const initialState: AgentState = {
 export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AgentState>(initialState);
 
-  const startAnalysis = (rfpData: ScrapeResult) => {
+  const startAnalysis = async (rfpData: ScrapeResult) => {
     setState(prev => ({
       ...prev,
       currentStep: 'processing',
@@ -108,65 +112,58 @@ export const AgentProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       agents: prev.agents.map(agent => ({ ...agent, status: 'pending', progress: 0, result: null }))
     }));
 
-    // Simulate agent processing
-    simulateAgentProcessing();
-  };
-
-  const simulateAgentProcessing = () => {
-    const agentProcessingTimes = [2000, 3000, 4000, 5000, 6000, 7000]; // Different completion times
-    
-    state.agents.forEach((agent, index) => {
-      setTimeout(() => {
-        // Start agent
-        updateAgentProgress(agent.id, 0, 'running');
-        
-        // Progress updates
-        const progressInterval = setInterval(() => {
-          setState(prev => {
-            const updatedAgents = prev.agents.map(a => {
-              if (a.id === agent.id && a.status === 'running' && a.progress < 100) {
-                return { ...a, progress: Math.min(a.progress + 20, 100) };
-              }
-              return a;
-            });
-            return { ...prev, agents: updatedAgents };
-          });
-        }, 500);
-
-        // Complete agent
-        setTimeout(() => {
-          clearInterval(progressInterval);
-          const results = [
-            `Requirements extracted: ${Math.floor(Math.random() * 20) + 5} items`,
-            `Market data: ${Math.floor(Math.random() * 10) + 5} competitors found`,
-            `Vendors identified: ${Math.floor(Math.random() * 5) + 3} potential partners`,
-            `Cost estimate: $${(Math.random() * 900000 + 100000).toLocaleString()}`,
-            `Compliance check: ${Math.floor(Math.random() * 3) + 2} requirements verified`,
-            `Proposal generated: ${Math.floor(Math.random() * 20) + 10} pages`
-          ];
-          
-          setState(prev => {
-            const updatedAgents = prev.agents.map(a => {
-              if (a.id === agent.id) {
-                return { ...a, status: 'completed' as const, progress: 100, result: results[index] };
-              }
-              return a;
-            });
-            
-            // Check if all agents are completed
-            const allCompleted = updatedAgents.every(a => a.status === 'completed');
-            
-            return {
+    try {
+      // Start progress simulation
+      const progressIntervals = anthropicAgentService.simulateProgressUpdates(
+        (agentId, progress, status, result) => {
+          updateAgentProgress(agentId, progress, status);
+          if (result && status === 'completed') {
+            setState(prev => ({
               ...prev,
-              agents: updatedAgents,
-              currentStep: allCompleted ? 'completed' as const : prev.currentStep,
-              isProcessing: !allCompleted
-            };
-          });
-        }, agentProcessingTimes[index]);
-        
-      }, index * 1000); // Stagger agent starts
-    });
+              agents: prev.agents.map(agent =>
+                agent.id === agentId
+                  ? { ...agent, result: result.substring(0, 100) + '...' }
+                  : agent
+              )
+            }));
+          }
+        }
+      );
+
+      // Run actual Anthropic analysis
+      const results = await anthropicAgentService.analyzeRFPWithAgents(rfpData);
+      
+      // Clear progress intervals
+      progressIntervals.forEach(interval => clearInterval(interval));
+      
+      // Update with real results
+      setState(prev => ({
+        ...prev,
+        anthropicResults: results,
+        currentStep: 'completed',
+        isProcessing: false,
+        agents: prev.agents.map((agent, index) => ({
+          ...agent,
+          status: 'completed' as const,
+          progress: 100,
+          result: Object.values(results.results)[index]?.substring(0, 150) + '...' || 'Analysis completed'
+        }))
+      }));
+
+    } catch (error) {
+      console.error('Analysis failed:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Analysis failed',
+        isProcessing: false,
+        currentStep: 'input',
+        agents: prev.agents.map(agent => ({
+          ...agent,
+          status: 'error' as const,
+          result: 'Analysis failed'
+        }))
+      }));
+    }
   };
 
   const updateAgentProgress = (agentId: number, progress: number, status?: 'pending' | 'running' | 'completed' | 'error') => {
