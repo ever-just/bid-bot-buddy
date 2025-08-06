@@ -1,3 +1,4 @@
+
 interface ScrapeResult {
   status: string;
   url: string;
@@ -65,14 +66,13 @@ interface RFPAnalysis {
 
 class ApiService {
   private baseUrl = 'http://localhost:8080';
-  private demoMode = false; // Disable demo mode to use real scraping
 
   async scrapeRFP(url: string): Promise<ScrapeResult> {
     try {
-      console.log('🕷️ Starting real web scraping for:', url);
+      console.log('🕷️ Starting hybrid web scraping for:', url);
       
-      // Use the new web-scraper edge function
-      const response = await fetch(`https://dywlonihwrnutwvzqivo.functions.supabase.co/web-scraper`, {
+      // Use the new advanced scraper edge function with fallback logic
+      const response = await fetch(`https://dywlonihwrnutwvzqivo.functions.supabase.co/advanced-scraper`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -87,25 +87,26 @@ class ApiService {
       const result = await response.json();
       
       if (result.status === 'error') {
-        throw new Error(result.error || 'Failed to scrape URL');
+        console.error('❌ Hybrid scraping failed:', result.error);
+        throw new Error(result.error || 'Failed to scrape URL with hybrid approach');
       }
       
-      console.log('✅ Web scraping successful:', {
+      console.log('✅ Hybrid web scraping successful:', {
         title: result.title,
         textLength: result.content?.text?.full_text?.length || 0,
-        url: result.url
+        url: result.url,
+        strategy: result.strategy || 'hybrid'
       });
 
       return result;
       
     } catch (error) {
-      console.error('❌ Error scraping RFP:', error);
+      console.error('❌ Error in hybrid scraping system:', error);
       
-      // Return error result instead of falling back to demo
       return {
         status: 'error',
         url: url,
-        error: error instanceof Error ? error.message : 'Failed to scrape the URL'
+        error: error instanceof Error ? error.message : 'Failed to scrape the URL with advanced methods'
       };
     }
   }
